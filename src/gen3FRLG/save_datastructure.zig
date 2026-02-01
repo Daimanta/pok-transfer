@@ -1,4 +1,5 @@
 const std = @import("std");
+const moves_ns = @import("../general/moves.zig");
 
 pub const save_copy_size = 57344;
 pub const section_size = 4096;
@@ -68,12 +69,19 @@ fn getDecryptedBlock(stripped_mon_data: StrippedMonData, letter: u8) [12]u8 {
     return @bitCast(decrypted_u32);
 }
 
+pub const PPBonuses = packed struct {
+    move1: u2,
+    move2: u2,
+    move3: u2,
+    move4: u2
+};
+
 
 pub const GrowthBlock = struct {
     dex_number: u16,
     item_held: u16,
     experience: u32,
-    pp_bonuses: u8,
+    pp_bonuses: PPBonuses,
     friendship: u8,
 
     pub fn fromStrippedMonData(stripped_mon_data: StrippedMonData) @This() {
@@ -83,7 +91,7 @@ pub const GrowthBlock = struct {
             .dex_number = @bitCast(decrypted[0..2].*),
             .item_held = @bitCast(decrypted[2..4].*),
             .experience = @bitCast(decrypted[4..8].*),
-            .pp_bonuses = decrypted[8],
+            .pp_bonuses = @bitCast(decrypted[8]),
             .friendship = decrypted[9]
         };
     }
@@ -111,6 +119,15 @@ pub const AttackBlock = struct {
             .pp3 = decrypted[10],
             .pp4 = decrypted[11],
         };
+    }
+
+    pub fn toMoveIds(self: *const @This()) [4]?*const moves_ns.Move {
+        var result: [4]?*const moves_ns.Move =.{null} ** 4;
+        if (self.move1 != 0) result[0] = &moves_ns.moves[self.move1 - 1];
+        if (self.move2 != 0) result[1] = &moves_ns.moves[self.move2 - 1];
+        if (self.move3 != 0) result[2] = &moves_ns.moves[self.move3 - 1];
+        if (self.move4 != 0) result[3] = &moves_ns.moves[self.move4 - 1];
+        return result;
     }
 };
 
@@ -207,12 +224,20 @@ pub const MiscBlock = struct {
     }
 };
 
+pub const MiscFlags = packed struct {
+    is_bad_egg: bool,
+    has_species: bool,
+    use_egg_name: bool,
+    block_box_rs: bool,
+    padding0: u4
+};
+
 pub const StrippedMonData = struct {
     personality_value: u32,
     ot_id: u32,
     nickname: [10]u8,
     language: u8,
-    misc_flags: u8,
+    misc_flags: MiscFlags,
     ot_name: [7]u8,
     markings: u8,
     checksum: u16,
@@ -225,7 +250,7 @@ pub const StrippedMonData = struct {
             .ot_id = @bitCast(bytes[4..8].*),
             .nickname = bytes[8..18].*,
             .language = bytes[18],
-            .misc_flags = bytes[19],
+            .misc_flags = @bitCast(bytes[19]),
             .ot_name = bytes[20..27].*,
             .markings = bytes[27],
             .checksum = @bitCast(bytes[28..30].*),
@@ -240,9 +265,19 @@ pub const StrippedMonData = struct {
 
 };
 
+pub const StatusCondition = packed struct {
+    sleep: u3,
+    poison: bool,
+    burn: bool,
+    freeze: bool,
+    paralysis: bool,
+    bad_poison: bool,
+    padding0: u24
+};
+
 pub const MonData = struct {
     stripped_mon_data: StrippedMonData,
-    status_condition: u32,
+    status_condition: StatusCondition,
     level: u8,
     mail_id: u8,
     current_hp: u16,
@@ -266,6 +301,22 @@ pub const MonData = struct {
             .speed = @bitCast(bytes[94..96].*),
             .special_attack = @bitCast(bytes[96..98].*),
             .special_defense = @bitCast(bytes[98..100].*)
+        };
+    }
+
+    pub fn fromStrippedMonData(stripped_mon_data: StrippedMonData) @This() {
+        return .{
+            .stripped_mon_data = stripped_mon_data,
+            .status_condition = 0,
+            .level = 0,
+            .mail_id = 0,
+            .current_hp = 0,
+            .total_hp = 0,
+            .attack = 0,
+            .defense = 0,
+            .speed = 0,
+            .special_attack = 0,
+            .special_defense = 0
         };
     }
 
