@@ -21,6 +21,39 @@ pub const boxes_total_size = 33744;
 pub const party_offset = 0x0034;
 pub const party_size = 1528;
 
+
+pub const StrippedMonData = struct {
+    personality_value: u32,
+    ot_id: u32,
+    nickname: [10]u8,
+    language: u8,
+    misc_flags: u8,
+    ot_name: [7]u8,
+    markings: u8,
+    checksum: u16,
+    unknown0: u16,
+    data: [48]u8
+};
+
+pub const MonData = struct {
+    stripped_mon_data: StrippedMonData,
+    status_condition: u32,
+    level: u8,
+    mail_id: u8,
+    current_hp: u16,
+    total_hp: u16,
+    attack: u16,
+    defense: u16,
+    speed: u16,
+    special_attack: u16,
+    special_defense: u16
+};
+
+pub const FullPartyData = struct {
+    number_of_mon: u8,
+    mons: [6]MonData
+};
+
 pub fn getLatestSave(bytes: []const u8) u1 {
     const save0: u16 = @bitCast(bytes[save_index_offset..save_index_offset + 2].*);
     const save1: u16 = @bitCast(bytes[save_copy_size + save_index_offset..save_copy_size + save_index_offset + 2].*);
@@ -59,5 +92,5 @@ pub fn getBoxBytes(bytes: []const u8) [boxes_total_size]u8 {
     std.mem.copyForwards(u8, result[moved..moved + last_box_section_size], bytes[last_section_start..last_section_start + last_box_section_size]);
 
     return result;
-
 }
+
