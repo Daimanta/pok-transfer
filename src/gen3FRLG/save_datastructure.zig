@@ -19,8 +19,193 @@ pub const last_box_section_size = 2000;
 pub const boxes_total_size = 33744;
 
 pub const party_offset = 0x0034;
+pub const party_mons_offset = 0x0038;
 pub const party_size = 1528;
 
+pub const stripped_mon_size = 80;
+pub const full_mon_size = 100;
+pub const mon_subsection_size = 12;
+
+pub const orderings: [24][]const u8 = .{
+    "GAEM",
+    "GAME",
+    "GEAM",
+    "GEMA",
+    "GMAE",
+    "GMEA",
+    "AGEM",
+    "AGME",
+    "AEGM",
+    "AEMG",
+    "AMGE",
+    "AMEG",
+    "EGAM",
+    "EGMA",
+    "EAGM",
+    "EAMG",
+    "EMGA",
+    "EMAG",
+    "MGAE",
+    "MGEA",
+    "MAGE",
+    "MAEG",
+    "MEGA",
+    "MEAG",
+};
+
+fn getDecryptedBlock(stripped_mon_data: StrippedMonData, letter: u8) [12]u8 {
+    const encryption_key = stripped_mon_data.personality_value ^ stripped_mon_data.ot_id;
+    const block_order_index = stripped_mon_data.getBlockOrderIndex();
+    const block_number = std.mem.indexOfScalar(u8, orderings[block_order_index], letter).?;
+    const encrypted_data = stripped_mon_data.data[block_number * mon_subsection_size..(block_number * mon_subsection_size) + mon_subsection_size][0..mon_subsection_size];
+    const encrypted_u32: [3]u32 = @bitCast(encrypted_data.*);
+    var decrypted_u32: [3]u32 = undefined;
+    var i: usize = 0;
+    while (i < encrypted_u32.len): ( i += 1) {
+        decrypted_u32[i] = encrypted_u32[i] ^ encryption_key;
+    }
+
+    return @bitCast(decrypted_u32);
+}
+
+
+pub const GrowthBlock = struct {
+    dex_number: u16,
+    item_held: u16,
+    experience: u32,
+    pp_bonuses: u8,
+    friendship: u8,
+
+    pub fn fromStrippedMonData(stripped_mon_data: StrippedMonData) @This() {
+        const decrypted: [12]u8 = getDecryptedBlock(stripped_mon_data, 'G');
+
+        return .{
+            .dex_number = @bitCast(decrypted[0..2].*),
+            .item_held = @bitCast(decrypted[2..4].*),
+            .experience = @bitCast(decrypted[4..8].*),
+            .pp_bonuses = decrypted[8],
+            .friendship = decrypted[9]
+        };
+    }
+};
+
+pub const AttackBlock = struct {
+    move1: u16,
+    move2: u16,
+    move3: u16,
+    move4: u16,
+    pp1: u8,
+    pp2: u8,
+    pp3: u8,
+    pp4: u8,
+
+    pub fn fromStrippedMonData(stripped_mon_data: StrippedMonData) @This() {
+        const decrypted: [12]u8 = getDecryptedBlock(stripped_mon_data, 'A');
+        return .{
+            .move1 = @bitCast(decrypted[0..2].*),
+            .move2 = @bitCast(decrypted[2..4].*),
+            .move3 = @bitCast(decrypted[4..6].*),
+            .move4 = @bitCast(decrypted[6..8].*),
+            .pp1 = decrypted[8],
+            .pp2 = decrypted[9],
+            .pp3 = decrypted[10],
+            .pp4 = decrypted[11],
+        };
+    }
+};
+
+pub const EVConditionBlock = struct {
+    hp_ev: u8,
+    attack_ev: u8,
+    defense_ev: u8,
+    speed_ev: u8,
+    special_attack_ev: u8,
+    special_defense_ev: u8,
+    coolness: u8,
+    beauty: u8,
+    cuteness: u8,
+    smartness: u8,
+    toughness: u8,
+    feel: u8,
+
+    pub fn fromStrippedMonData(stripped_mon_data: StrippedMonData) @This() {
+        const decrypted: [12]u8 = getDecryptedBlock(stripped_mon_data, 'E');
+        return .{
+            .hp_ev = decrypted[0],
+            .attack_ev = decrypted[1],
+            .defense_ev = decrypted[2],
+            .speed_ev = decrypted[3],
+            .special_attack_ev = decrypted[4],
+            .special_defense_ev = decrypted[5],
+            .coolness = decrypted[6],
+            .beauty = decrypted[7],
+            .cuteness = decrypted[8],
+            .smartness = decrypted[9],
+            .toughness = decrypted[10],
+            .feel = decrypted[11]
+        };
+
+    }
+};
+
+pub const Origins = packed struct {
+    level_met: u7,
+    origin_game: u4,
+    pokeball_type: u4,
+    trainer_is_female: bool
+};
+
+pub const Ability = packed struct {
+    hp_iv: u5,
+    attack_iv: u5,
+    defense_iv: u5,
+    speed_iv: u5,
+    special_attack_iv: u5,
+    special_defense_iv: u5,
+    egg: bool,
+    ability: u1
+};
+
+pub const Ribbons = packed struct {
+    cool: u3,
+    beauty: u3,
+    cute: u3,
+    smart: u3,
+    tough: u3,
+    champion: bool,
+    winning: bool,
+    victory: bool,
+    artist: bool,
+    effort: bool,
+    battle_champion: bool,
+    regional_champion: bool,
+    national_champion: bool,
+    country: bool,
+    national: bool,
+    earth: bool,
+    world: bool,
+    padding0: u4,
+    obedience: bool
+};
+
+pub const MiscBlock = struct {
+    pokerus: u8,
+    met_location: u8,
+    origins: Origins,
+    ability: Ability,
+    ribbons: Ribbons,
+
+    pub fn fromStrippedMonData(stripped_mon_data: StrippedMonData) @This() {
+        const decrypted: [12]u8 = getDecryptedBlock(stripped_mon_data, 'M');
+        return .{
+            .pokerus = decrypted[0],
+            .met_location = decrypted[1],
+            .origins = @bitCast(decrypted[2..4].*),
+            .ability = @bitCast(decrypted[4..8].*),
+            .ribbons = @bitCast(decrypted[8..12].*)
+        };
+    }
+};
 
 pub const StrippedMonData = struct {
     personality_value: u32,
@@ -32,7 +217,27 @@ pub const StrippedMonData = struct {
     markings: u8,
     checksum: u16,
     unknown0: u16,
-    data: [48]u8
+    data: [48]u8,
+
+    fn fromBytes(bytes: [stripped_mon_size]u8) @This() {
+        return .{
+            .personality_value = @bitCast(bytes[0..4].*),
+            .ot_id = @bitCast(bytes[4..8].*),
+            .nickname = bytes[8..18].*,
+            .language = bytes[18],
+            .misc_flags = bytes[19],
+            .ot_name = bytes[20..27].*,
+            .markings = bytes[27],
+            .checksum = @bitCast(bytes[28..30].*),
+            .unknown0 = @bitCast(bytes[30..32].*),
+            .data = bytes[32..80].*
+        };
+    }
+
+    fn getBlockOrderIndex(self: *const@This()) u8 {
+        return @intCast(@mod(self.personality_value, 24));
+    }
+
 };
 
 pub const MonData = struct {
@@ -46,7 +251,24 @@ pub const MonData = struct {
     defense: u16,
     speed: u16,
     special_attack: u16,
-    special_defense: u16
+    special_defense: u16,
+
+    fn fromBytes(bytes: [full_mon_size]u8) @This() {
+        return .{
+            .stripped_mon_data = StrippedMonData.fromBytes(bytes[0..80].*),
+            .status_condition = @bitCast(bytes[80..84].*),
+            .level = bytes[84],
+            .mail_id = bytes[85],
+            .current_hp = @bitCast(bytes[86..88].*),
+            .total_hp = @bitCast(bytes[88..90].*),
+            .attack = @bitCast(bytes[90..92].*),
+            .defense = @bitCast(bytes[92..94].*),
+            .speed = @bitCast(bytes[94..96].*),
+            .special_attack = @bitCast(bytes[96..98].*),
+            .special_defense = @bitCast(bytes[98..100].*)
+        };
+    }
+
 };
 
 pub const FullPartyData = struct {
@@ -92,5 +314,19 @@ pub fn getBoxBytes(bytes: []const u8) [boxes_total_size]u8 {
     std.mem.copyForwards(u8, result[moved..moved + last_box_section_size], bytes[last_section_start..last_section_start + last_box_section_size]);
 
     return result;
+}
+
+pub fn getFullPartyData(bytes: []const u8) FullPartyData {
+    const party_section_start = getSectionStart(bytes, party_section_id);
+    const mon_start = party_section_start + party_mons_offset;
+    const mon_bytes = bytes[mon_start..mon_start + 600];
+    return .{
+        .number_of_mon = bytes[party_section_start + party_offset],
+        .mons =
+            .{MonData.fromBytes(mon_bytes[0..100].*), MonData.fromBytes(mon_bytes[100..200].*),
+              MonData.fromBytes(mon_bytes[200..300].*), MonData.fromBytes(mon_bytes[300..400].*),
+              MonData.fromBytes(mon_bytes[400..500].*), MonData.fromBytes(mon_bytes[500..600].*)},
+    };
+
 }
 
