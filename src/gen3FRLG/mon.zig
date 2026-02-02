@@ -4,6 +4,8 @@ const gen3_data = @import("save_datastructure.zig");
 const moves_ns = @import("../general/moves.zig");
 const encoding = @import("encoding.zig");
 
+pub const gen3_species_data: *align (1) const[386]MonSpecies = std.mem.bytesAsValue([386]MonSpecies, @embedFile("species.dat"));
+
 pub const ContestStats = struct {
     coolness: u8,
     beauty: u8,
@@ -66,6 +68,33 @@ pub const MiscFlags = struct {
             .block_box_rs = misc_flags.block_box_rs
         };
     }
+};
+
+pub const MonSpecies = extern struct {
+    base_hp: u8,
+    base_attack: u8,
+    base_defense: u8,
+    base_speed: u8,
+    base_special_attack: u8,
+    base_special_defense: u8,
+    type1: u8,
+    type2: u8,
+    catch_rate: u8,
+    base_xp_yield: u8,
+    effort_yield: u16,
+    item1: u16,
+    item2: u16,
+    gender: u8,
+    egg_cycles: u8,
+    base_friendship: u8,
+    levelup_type: u8,
+    egg_group_1: u8,
+    egg_group_2: u8,
+    ability_1: u8,
+    ability_2: u8,
+    safari_zone_rate: u8,
+    color_flip: u8,
+    padding: u16
 };
 
 pub const MonBaseData = struct {
