@@ -1,5 +1,6 @@
 const std = @import("std");
 const moves_ns = @import("../general/moves.zig");
+const gen3 = @import("mon.zig");
 
 pub const save_copy_size = 57344;
 pub const section_size = 4096;
