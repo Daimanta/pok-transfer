@@ -28,6 +28,12 @@ pub const stripped_mon_size = 80;
 pub const full_mon_size = 100;
 pub const mon_subsection_size = 12;
 
+pub const number_of_boxes = 14;
+pub const mon_per_box = 30;
+pub const total_box_mon = number_of_boxes * mon_per_box;
+
+pub const box_size = stripped_mon_size * mon_per_box;
+
 pub const orderings: [24][]const u8 = .{
     "GAEM",
     "GAME",
@@ -87,7 +93,6 @@ pub const GrowthBlock = struct {
 
     pub fn fromStrippedMonData(stripped_mon_data: StrippedMonData) @This() {
         const decrypted: [12]u8 = getDecryptedBlock(stripped_mon_data, 'G');
-
         return .{
             .dex_number = @bitCast(decrypted[0..2].*),
             .item_held = @bitCast(decrypted[2..4].*),
@@ -264,6 +269,22 @@ pub const StrippedMonData = struct {
         return @intCast(@mod(self.personality_value, 24));
     }
 
+    pub fn calculate_checksum(self: *const@This()) u16 {
+        var result: u16 = 0;
+        const block1: [6]u16 = @bitCast(getDecryptedBlock(self.*, 'G'));
+        const block2: [6]u16 = @bitCast(getDecryptedBlock(self.*, 'A'));
+        const block3: [6]u16 = @bitCast(getDecryptedBlock(self.*, 'M'));
+        const block4: [6]u16 = @bitCast(getDecryptedBlock(self.*, 'E'));
+        const blocks: [4][6]u16 = .{block1, block2, block3, block4};
+        for (blocks) |block| {
+            for (block) |word| {
+                result +%= word;
+            }
+        }
+
+        return result;
+    }
+
 };
 
 pub const StatusCondition = packed struct {
@@ -305,22 +326,6 @@ pub const MonData = struct {
         };
     }
 
-    pub fn fromStrippedMonData(stripped_mon_data: StrippedMonData) @This() {
-        return .{
-            .stripped_mon_data = stripped_mon_data,
-            .status_condition = 0,
-            .level = 0,
-            .mail_id = 0,
-            .current_hp = 0,
-            .total_hp = 0,
-            .attack = 0,
-            .defense = 0,
-            .speed = 0,
-            .special_attack = 0,
-            .special_defense = 0
-        };
-    }
-
 };
 
 pub const FullPartyData = struct {
@@ -358,7 +363,7 @@ pub fn getBoxBytes(bytes: []const u8) [boxes_total_size]u8 {
     var i: usize = first_box_section_id;
     var moved: usize = 0;
     while (i <= last_fullsize_box_section_id ): ( i += 1 ) {
-        const section_start = getSectionStart(bytes, i);
+        const section_start = getSectionStart(bytes, @intCast(i));
         std.mem.copyForwards(u8, result[moved..moved + box_section_size], bytes[section_start..section_start + box_section_size]);
         moved += box_section_size;
     }
@@ -382,3 +387,35 @@ pub fn getFullPartyData(bytes: []const u8) FullPartyData {
 
 }
 
+pub const FullBoxData = struct {
+    number_of_mons: u8,
+    mons: [mon_per_box]StrippedMonData,
+
+    pub fn init(bytes: *const[box_size]u8) @This() {
+        var number_of_mon: u8 = 0;
+        var mons: [mon_per_box]StrippedMonData = undefined;
+
+        var i: usize = 0;
+        while (i < mon_per_box): (i += 1) {
+            const start = i * stripped_mon_size;
+            const end = start + stripped_mon_size;
+            const mon_bytes = bytes[start..end][0..80];
+            var j: usize = 0;
+            var active = false;
+            while (j < mon_bytes.len and !active): (j += 1) {
+                if (mon_bytes[j] != 0) {
+                    active = true;
+                }
+            }
+            if (active) {
+                const mon = StrippedMonData.fromBytes(bytes[start..end][0..80].*);
+                mons[number_of_mon] = mon;
+                number_of_mon += 1;
+            }
+        }
+        return .{
+            .number_of_mons = number_of_mon,
+            .mons = mons
+        };
+    }
+};

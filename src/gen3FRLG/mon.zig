@@ -3,6 +3,7 @@ const std = @import("std");
 const gen3_data = @import("save_datastructure.zig");
 const moves_ns = @import("../general/moves.zig");
 const encoding = @import("encoding.zig");
+const interface = @import("../general/interface.zig");
 
 pub const gen3_species_data: *align (1) const[386]MonSpecies = std.mem.bytesAsValue([386]MonSpecies, @embedFile("species.dat"));
 
@@ -117,6 +118,12 @@ pub const MonSpecies = extern struct {
     padding: u16
 };
 
+pub const Gender = enum {
+    MALE,
+    FEMALE,
+    UNKNOWN
+};
+
 pub const MonBaseData = struct {
     personality_value: u32,
     ot_id: u32,
@@ -176,7 +183,7 @@ pub const MonBaseData = struct {
     }
 
     fn getNature(self: *const @This()) u8 {
-        return @mod(self.personality_value, 25);
+        return @intCast(@mod(self.personality_value, 25));
     }
 
     fn getNatureMultiplier(self: *const @This(), stat_type: StatTypes) f64 {
@@ -204,6 +211,42 @@ pub const MonBaseData = struct {
         }
 
         return 1.0;
+    }
+
+    fn getGender(self: *const @This()) Gender {
+        const species = self.getSpecies();
+        const limit_value = species.gender;
+        if (limit_value == 0) return .MALE;
+        if (limit_value == 254) return .FEMALE;
+        if (limit_value == 255) return .UNKNOWN;
+
+        const check_value = @mod(self.personality_value, 256);
+        if (check_value >= limit_value) {
+            return .MALE;
+        } else {
+            return .FEMALE;
+        }
+    }
+
+    fn getSpecies(self: *const @This()) MonSpecies {
+        return gen3_species_data[self.dex_number - 1];
+    }
+
+    fn getAbility(self: *const @This()) u1 {
+        return @mod(self.personality_value, 2);
+    }
+
+    fn isShiny(self: *const @This()) bool {
+        const ot_id = self.ot_id;
+        const ot_id_1: u16 = @truncate(ot_id >> 16);
+        const ot_id_2: u16 = @truncate(ot_id);
+
+        const personality_value = self.personality_value;
+        const pers_1: u16 = @truncate(personality_value >> 16);
+        const pers_2: u16 = @truncate(personality_value);
+
+        const xored = ot_id_1 ^ ot_id_2 ^ pers_1 ^ pers_2;
+        return xored < 8;
     }
 };
 
@@ -359,7 +402,7 @@ pub const Stats = struct {
                 .freeze = false,
                 .paralysis = false,
                 .poison = false,
-                .sleep = false
+                .sleep = 0
             },
             .level = level,
             .mail_id = 0,
@@ -370,6 +413,75 @@ pub const Stats = struct {
             .speed = calculate_other_stat(species.base_speed, mon_base_data.iv_egg_ability.speed_iv, mon_base_data.ev.speed, level, mon_base_data.getNatureMultiplier(.SPEED)),
             .special_attack = calculate_other_stat(species.base_special_attack, mon_base_data.iv_egg_ability.special_attack_iv, mon_base_data.ev.special_attack, level, mon_base_data.getNatureMultiplier(.SPECIAL_ATTACK)),
             .special_defense = calculate_other_stat(species.base_special_defense, mon_base_data.iv_egg_ability.special_defense_iv, mon_base_data.ev.special_defense, level, mon_base_data.getNatureMultiplier(.SPECIAL_DEFENSE)),
+        };
+    }
+};
+
+pub const MonParty = struct {
+    number_of_mon: u8,
+    mons: [6]Mon,
+
+    pub fn init(full_party_data: gen3_data.FullPartyData, allocator: std.mem.Allocator) @This() {
+        var mons: [6]Mon = undefined;
+        var i: usize = 0;
+        while (i < full_party_data.number_of_mon): (i += 1) {
+            mons[i] = Mon.fromMonData(full_party_data.mons[i], allocator);
+        }
+
+        return MonParty{
+            .number_of_mon = full_party_data.number_of_mon,
+            .mons = mons
+        };
+    }
+};
+
+pub const MonBox = struct {
+    box_number: u8,
+    number_of_mon: u8,
+    mons: [30]Mon,
+
+    pub fn init(box_number: u8, full_box_data: gen3_data.FullBoxData, allocator: std.mem.Allocator) @This() {
+        var mons: [30]Mon = undefined;
+        var i: usize = 0;
+        while (i < full_box_data.number_of_mons): (i += 1) {
+            mons[i] = Mon.fromStrippedMonData(full_box_data.mons[i], allocator);
+        }
+        return .{
+            .box_number = box_number,
+            .number_of_mon = full_box_data.number_of_mons,
+            .mons = mons
+        };
+    }
+};
+
+pub const CaughtMon = struct {
+    national_dex: bool,
+    current_box: u32,
+    party: MonParty,
+    boxes: [gen3_data.number_of_boxes]MonBox,
+    move_mon: interface.MoveMon,
+
+    pub fn init(bytes: []const u8, allocator: std.mem.Allocator) @This() {
+        const full_party_data = gen3_data.getFullPartyData(bytes);
+        const mon_party = MonParty.init(full_party_data, allocator);
+
+        const box_bytes = gen3_data.getBoxBytes(bytes);
+        var boxes: [gen3_data.number_of_boxes]MonBox = undefined;
+        var i: usize = 0;
+        while (i < gen3_data.number_of_boxes): ( i += 1) {
+            const start = 4 + i*gen3_data.box_size;
+            const end = start + gen3_data.box_size;
+            const full_box_data = gen3_data.FullBoxData.init(box_bytes[start..end][0..gen3_data.box_size]);
+            const mon_box = MonBox.init(@intCast(i + 1), full_box_data, allocator);
+            boxes[i] = mon_box;
+        }
+
+        return .{
+            .national_dex = false,
+            .current_box = @bitCast(box_bytes[0..4].*),
+            .party = mon_party,
+            .boxes = boxes,
+            .move_mon = interface.MoveMon.init(6, 30, 14, allocator)
         };
     }
 };
@@ -388,43 +500,43 @@ fn level_from_dex_number_and_xp(dex_number: u16, xp: u32) u8 {
 }
 
 fn medium_fast_level(xp: u32) u8 {
-    var i = 1;
+    var i: usize = 1;
     while (i <= 100): ( i += 1) {
         const required: usize = (i*i*i);
         if (required > xp) {
-            return i - 1;
+            return @intCast(i - 1);
         }
     }
     return 100;
 }
 
 fn erratic_level(xp: u32) u8 {
-    var i = 3;
+    var i: usize = 3;
     while (i < 50): (i += 1) {
         const required: usize = ((i*i*i)*(100 - i))/50;
         if (required > xp) {
-            return i - 1;
+            return @intCast(i - 1);
         }
     }
 
     while (i < 68): (i += 1) {
         const required: usize = ((i*i*i)*(150 - i))/100;
         if (required > xp) {
-            return i - 1;
+            return @intCast(i - 1);
         }
     }
 
     while (i < 98): (i += 1) {
         const required: usize = ((i*i*i)*((1911-10*i)/3))/500;
         if (required > xp) {
-            return i - 1;
+            return @intCast(i - 1);
         }
     }
 
     while (i <= 100): (i += 1) {
         const required: usize = ((i*i*i)*(160 - i))/100;
         if (required > xp) {
-            return i - 1;
+            return @intCast(i - 1);
         }
     }
 
@@ -432,25 +544,25 @@ fn erratic_level(xp: u32) u8 {
 }
 
 fn fluctuating_level(xp: u32) u8 {
-    var i = 3;
+    var i: usize = 3;
     while (i < 15): (i += 1) {
         const required: usize = ((i*i*i)*(24+((i + 1)/3)))/50;
         if (required > xp) {
-            return i - 1;
+            return @intCast(i - 1);
         }
     }
 
     while (i < 36): (i += 1) {
         const required: usize = ((i*i*i)*(i + 14))/50;
         if (required > xp) {
-            return i - 1;
+            return @intCast(i - 1);
         }
     }
 
     while (i <= 100): (i += 1) {
         const required: usize = ((i*i*i)*(32+((i + 0)/2)))/50;
         if (required > xp) {
-            return i - 1;
+            return @intCast(i - 1);
         }
     }
     return 100;
@@ -459,33 +571,33 @@ fn fluctuating_level(xp: u32) u8 {
 fn medium_slow_level(xp: u32) u8 {
     if (xp < 9) return 1;
     if (xp < 57) return 2;
-    var i = 3;
+    var i: usize = 3;
     while (i <= 100): ( i += 1) {
         const required: usize = ((i*i*i)*6)/5 - (i*i)*15 + 100 * i - 140;
         if (required > xp) {
-            return i - 1;
+            return @intCast(i - 1);
         }
     }
     return 100;
 }
 
 fn fast_level(xp: u32) u8 {
-    var i = 1;
+    var i: usize = 1;
     while (i <= 100): ( i += 1) {
         const required: usize = ((i*i*i)*4)/5;
         if (required > xp) {
-            return i - 1;
+            return @intCast(i - 1);
         }
     }
     return 100;
 }
 
 fn slow_level(xp: u32) u8 {
-    var i = 1;
+    var i: usize = 1;
     while (i <= 100): ( i += 1) {
         const required: usize = ((i*i*i)*5)/4;
         if (required > xp) {
-            return i - 1;
+            return @intCast(i - 1);
         }
     }
     return 100;
@@ -496,7 +608,7 @@ fn calculate_max_hp(base_stat: u16, iv: u8, ev: u8, level: u8) u16 {
 }
 
 fn calculate_other_stat(base_stat: u16, iv: u8, ev: u8, level: u8, nature: f64) u16 {
-    const base = ((((ev/4) + iv + (2*base_stat)) * level) / 100) + 5;
+    const base: f64 = @floatFromInt(((((ev/4) + iv + (2*base_stat)) * level) / 100) + 5);
     return @intFromFloat(base * nature);
 }
 
@@ -504,8 +616,13 @@ pub const Mon = struct {
     base_data: MonBaseData,
     stats: Stats,
 
-    pub fn fromStrippedMonData(stripped_mon_data: gen3_data.StrippedMonData) @This() {
-        return fromMonData(gen3_data.MonData.fromStrippedMonData(stripped_mon_data));
+    pub fn fromStrippedMonData(stripped_mon_data: gen3_data.StrippedMonData, allocator: std.mem.Allocator) @This() {
+        const mon_base_data = MonBaseData.fromStrippedMonData(stripped_mon_data, allocator);
+        const stats = Stats.fromMonBaseData(mon_base_data);
+        return .{
+            .base_data = mon_base_data,
+            .stats = stats
+        };
     }
 
     pub fn fromMonData(mon_data: gen3_data.MonData, allocator: std.mem.Allocator) @This() {
