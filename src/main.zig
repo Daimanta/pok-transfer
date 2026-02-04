@@ -120,8 +120,8 @@ pub fn main() !void {
         exit(1);
     };
 
-    if (source_version != .GEN1 and source_version != .GEN2GS) {
-        pok_transfer.bufferedPrint("Only Gen 1 and 2 is supported at this moment. Exiting.\n", .{});
+    if (source_version != .GEN1 and source_version != .GEN2GS and source_version != .GEN3FRLG) {
+        pok_transfer.bufferedPrint("Only Gen 1,2,3 is supported at this moment. Exiting.\n", .{});
         exit(0);
     }
 

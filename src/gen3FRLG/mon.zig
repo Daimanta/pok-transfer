@@ -4,6 +4,12 @@ const gen3_data = @import("save_datastructure.zig");
 const moves_ns = @import("../general/moves.zig");
 const encoding = @import("encoding.zig");
 const interface = @import("../general/interface.zig");
+const versions = @import("../general/versions.zig");
+const pok_transfer = @import("../root.zig");
+
+pub const save_size = gen3_data.save_size;
+pub const number_of_boxes = 14;
+pub const box_size = 30;
 
 pub const gen3_species_data: *align (1) const[386]MonSpecies = std.mem.bytesAsValue([386]MonSpecies, @embedFile("species.dat"));
 
@@ -433,6 +439,15 @@ pub const MonParty = struct {
             .mons = mons
         };
     }
+
+    pub fn printSummary(self: *const @This()) void {
+        pok_transfer.bufferedPrint("Number of mon: {d}\n", .{self.number_of_mon});
+        var i: usize = 0;
+        while (i < self.number_of_mon): (i += 1) {
+            pok_transfer.bufferedPrint("{d}) ", .{i + 1});
+            self.mons[i].printShortSummary();
+        }
+    }
 };
 
 pub const MonBox = struct {
@@ -451,6 +466,10 @@ pub const MonBox = struct {
             .number_of_mon = full_box_data.number_of_mons,
             .mons = mons
         };
+    }
+
+    pub fn printSummary(self: *const @This()) void {
+        _ = self;
     }
 };
 
@@ -483,6 +502,55 @@ pub const CaughtMon = struct {
             .boxes = boxes,
             .move_mon = interface.MoveMon.init(6, 30, 14, allocator)
         };
+    }
+
+    pub fn printSummary(self: *const@This()) void {
+        _ = self;
+    }
+
+    pub fn printMonDetails(self: *const@This(), box: ?u8, mon: u8) void {
+        _ = self; _ = box; _ = mon;
+    }
+
+    pub fn markForTransfer(self: *const@This(), box: ?u8, mon: u8) void {
+        _ = self; _ = box; _ = mon;
+    }
+
+    pub fn unmarkForTransfer(self: *const@This(), box: ?u8, mon: u8) void {
+        _ = self; _ = box; _ = mon;
+    }
+
+    pub fn toSave(self: *const@This(), bytes: []u8) void {
+        _ = self; _ = bytes;
+    }
+
+    pub fn getVersion(self: *const@This()) versions.Version {
+        _ = self;
+        return .GEN3FRLG;
+    }
+
+    pub fn removeMon(self: *const@This(), box: ?u8, mon: u8) void {
+        _ = self; _ = box; _ = mon;
+    }
+
+    pub fn insertMon(self: *const@This(), mon: interface.MonInterface) !void {
+        _ = self; _ = mon;
+    }
+
+    pub fn getFreeSpace(self: *const@This()) u16 {
+        var free: u16 = number_of_boxes*box_size;
+        for (self.boxes) |box| {
+            free -= (box_size - box.number_of_mon);
+        }
+        return free;
+    }
+
+    pub fn getMon(self: *const@This(), box: ?u8, mon: u8) Mon {
+        if (box == null) {
+            return self.party.mons[mon];
+        } else {
+            return self.boxes[box.?].mons[mon];
+        }
     }
 };
 
@@ -630,5 +698,24 @@ pub const Mon = struct {
             .base_data = MonBaseData.fromStrippedMonData(mon_data.stripped_mon_data, allocator),
             .stats = Stats.fromMonData(mon_data)
         };
+    }
+
+    pub fn printFullSummary(self: *const @This()) void {
+        pok_transfer.bufferedPrint("{s}, lvl. {d} {s} {s}\n", .{self.base_data.nickname, self.stats.level, @import("../general/names.zig").mon_names[self.base_data.dex_number - 1], self.getGenderSymbol()});
+    }
+
+    pub fn printShortSummary(self: *const @This()) void {
+        pok_transfer.bufferedPrint("{s}, lvl. {d} {s} {s}\n", .{self.base_data.nickname, self.stats.level, @import("../general/names.zig").mon_names[self.base_data.dex_number - 1], self.getGenderSymbol()});
+    }
+
+    fn getGenderSymbol(self: *const @This()) []const u8 {
+        const gender = self.base_data.getGender();
+        if (gender == .MALE) {
+            return "♂";
+        } else if (gender == .FEMALE) {
+            return "♀";
+        } else {
+            return "";
+        }
     }
 };

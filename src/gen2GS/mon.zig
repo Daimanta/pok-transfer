@@ -6,6 +6,7 @@ const gen2data = @import("./save_datastructure.zig");
 const interface = @import("../general/interface.zig");
 const versions = @import("../general/versions.zig");
 const gen1 = @import("../gen1/mon.zig");
+const gen3 = @import("../gen3FRLG/mon.zig");
 
 const pok_transfer = @import("../root.zig");
 
@@ -310,6 +311,9 @@ pub const Mon = struct {
             },
             .gen2gs => {
                 return mon_interface.gen2gs;
+            },
+            .gen3frlg => {
+                return fromGen3(mon_interface.gen3frlg);
             }
         }
     }
@@ -336,6 +340,11 @@ pub const Mon = struct {
             .base_data = base_data,
             .stats = Stats.fromMonBaseData(base_data)
         };
+    }
+
+    fn fromGen3(mon: gen3.Mon) @This() {
+        _ = mon;
+        unreachable;
     }
 
     pub fn printFullSummary(self: *const @This()) void {

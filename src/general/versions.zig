@@ -1,6 +1,7 @@
 const std = @import("std");
 const gen1 = @import("../gen1/save_datastructure.zig");
 const gen2 = @import("../gen2GS/save_datastructure.zig");
+const gen3 = @import("../gen3FRLG/save_datastructure.zig");
 
 pub const UnknownVersionError = error{UnknownVersion};
 
@@ -20,6 +21,11 @@ pub fn determineVersion(bytes: []const u8) UnknownVersionError!Version {
     } else if (length >= gen2.save_size and length <= gen2.save_size + gen2.rtc_margin) {
         if (gen2.checksums_are_valid(bytes[0..gen2.save_size])) {
             return .GEN2GS;
+        }
+        return UnknownVersionError.UnknownVersion;
+    } else if (length == 1 << 17){
+        if (gen3.data_is_gen3_save(bytes)) {
+            return .GEN3FRLG;
         }
         return UnknownVersionError.UnknownVersion;
     } else {

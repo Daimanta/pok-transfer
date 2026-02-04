@@ -2,6 +2,8 @@ const std = @import("std");
 const moves_ns = @import("../general/moves.zig");
 const gen3 = @import("mon.zig");
 
+pub const save_size = 1 << 17;
+
 pub const save_copy_size = 57344;
 pub const section_size = 4096;
 
@@ -355,6 +357,12 @@ pub fn getSectionStart(bytes: []const u8, section_number: u8) usize {
     } else {
         return (@as(usize, latest_save) * save_copy_size) + ((14 - (first_section_number - section_number) ) * section_size);
     }
+}
+
+pub fn data_is_gen3_save(bytes: []const u8) bool {
+    if (bytes.len != 1 << 17) return false;
+    const magic_bytes = bytes[signature_offset..signature_offset + 4];
+    return std.mem.eql(u8, &[4]u8{0x25, 0x20, 0x01, 0x08}, magic_bytes);
 }
 
 pub fn getBoxBytes(bytes: []const u8) [boxes_total_size]u8 {
