@@ -605,6 +605,16 @@ pub const MonParty = struct {
             self.mons[i].printShortSummary();
         }
     }
+
+    fn toFullPartyData(self: *const @This()) gen3_data.FullPartyData {
+        var result: gen3_data.FullPartyData = undefined;
+        result.number_of_mon = self.number_of_mon;
+        var i = 0;
+        while (i < self.number_of_mon): (i += 1) {
+            result.mons[i] = gen3_data.MonData.fromMon(self.mons[i]);
+        }
+        return result;
+    }
 };
 
 pub const MonBox = struct {
@@ -633,6 +643,11 @@ pub const MonBox = struct {
             self.mons[i].printShortSummary();
         }
     }
+
+    fn toBytes(self: *const @This()) [gen3_data.box_size]u8 {
+        _ = &self;
+        gen3_data.StrippedMonData.fromMon(self.mons[0]);
+    }
 };
 
 pub const CaughtMon = struct {
@@ -643,7 +658,7 @@ pub const CaughtMon = struct {
     move_mon: interface.MoveMon,
 
     pub fn init(bytes: []const u8, allocator: std.mem.Allocator) @This() {
-        const full_party_data = gen3_data.getFullPartyData(bytes);
+        const full_party_data = gen3_data.FullPartyData.init(bytes);
         const mon_party = MonParty.init(full_party_data, allocator);
 
         const box_bytes = gen3_data.getBoxBytes(bytes);
@@ -685,7 +700,8 @@ pub const CaughtMon = struct {
     }
 
     pub fn toSave(self: *const@This(), bytes: []u8) void {
-        _ = self; _ = bytes;
+        _ = &self; _ = &bytes;
+        _ = gen3_data.StrippedMonData.fromMon(self.party.mons[0]);
     }
 
     pub fn getVersion(self: *const@This()) versions.Version {

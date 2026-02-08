@@ -1,6 +1,10 @@
 const std = @import("std");
 const moves_ns = @import("../general/moves.zig");
 const gen3 = @import("mon.zig");
+const encoding = @import("encoding.zig");
+
+const copyForwards = std.mem.copyForwards;
+const asBytes = std.mem.asBytes;
 
 pub const save_size = 1 << 17;
 
@@ -24,6 +28,7 @@ pub const boxes_total_size = 33744;
 
 pub const party_offset = 0x0034;
 pub const party_mons_offset = 0x0038;
+pub const party_mon_details_size = 604;
 pub const party_size = 1528;
 
 pub const stripped_mon_size = 80;
@@ -63,6 +68,22 @@ pub const orderings: [24][]const u8 = .{
     "MEAG",
 };
 
+fn getBlockNumber(personality_value: u32, letter: u8) u8 {
+    const block_order_index: u8 = @intCast(@mod(personality_value, 24));
+    return @intCast(std.mem.indexOfScalar(u8, orderings[block_order_index], letter).?);
+}
+
+fn encrypt(personality_value: u32, ot_id: u32, data: [12]u8) [12]u8 {
+    const encryption_key = personality_value ^ ot_id;
+    const data_u32: [3]u32 = @bitCast(data);
+    var encrypted_u32: [3]u32 = undefined;
+    var i: usize = 0;
+    while (i < data_u32.len): (i += 1) {
+        encrypted_u32[i] = data_u32[i] ^ encryption_key;
+    }
+    return @bitCast(encrypted_u32);
+}
+
 fn getDecryptedBlock(stripped_mon_data: StrippedMonData, letter: u8) [12]u8 {
     const encryption_key = stripped_mon_data.personality_value ^ stripped_mon_data.ot_id;
     const block_order_index = stripped_mon_data.getBlockOrderIndex();
@@ -86,12 +107,13 @@ pub const PPBonuses = packed struct {
 };
 
 
-pub const GrowthBlock = struct {
+pub const GrowthBlock = packed struct {
     dex_number: u16,
     item_held: u16,
     experience: u32,
     pp_bonuses: PPBonuses,
     friendship: u8,
+    padding: u16,
 
     pub fn fromStrippedMonData(stripped_mon_data: StrippedMonData) @This() {
         const decrypted: [12]u8 = getDecryptedBlock(stripped_mon_data, 'G');
@@ -100,12 +122,17 @@ pub const GrowthBlock = struct {
             .item_held = @bitCast(decrypted[2..4].*),
             .experience = @bitCast(decrypted[4..8].*),
             .pp_bonuses = @bitCast(decrypted[8]),
-            .friendship = decrypted[9]
+            .friendship = decrypted[9],
+            .padding = @bitCast(decrypted[10..12].*)
         };
+    }
+
+    pub fn toBytes(self: *const @This()) [12]u8 {
+        return @bitCast(self.*);
     }
 };
 
-pub const AttackBlock = struct {
+pub const AttackBlock = packed struct {
     move1: u16,
     move2: u16,
     move3: u16,
@@ -137,9 +164,13 @@ pub const AttackBlock = struct {
         if (self.move4 != 0) result[3] = &moves_ns.moves[self.move4 - 1];
         return result;
     }
+
+    pub fn toBytes(self: *const @This()) [12]u8 {
+        return @bitCast(self.*);
+    }
 };
 
-pub const EVConditionBlock = struct {
+pub const EVConditionBlock = packed struct {
     hp_ev: u8,
     attack_ev: u8,
     defense_ev: u8,
@@ -171,13 +202,26 @@ pub const EVConditionBlock = struct {
         };
 
     }
+
+    pub fn toBytes(self: *const @This()) [12]u8 {
+        return @bitCast(self.*);
+    }
 };
 
 pub const Origins = packed struct {
     level_met: u7,
     origin_game: u4,
     pokeball_type: u4,
-    trainer_is_female: bool
+    trainer_is_female: bool,
+
+    fn fromMon(mon_origins: gen3.Origins) @This() {
+        return .{
+            .level_met = mon_origins.level_met,
+            .origin_game = mon_origins.origin_game,
+            .pokeball_type = mon_origins.pokeball_type,
+            .trainer_is_female = mon_origins.trainer_is_female
+        };
+    }
 };
 
 pub const Ability = packed struct {
@@ -188,7 +232,20 @@ pub const Ability = packed struct {
     special_attack_iv: u5,
     special_defense_iv: u5,
     egg: bool,
-    ability: u1
+    ability: u1,
+
+    fn fromMon(mon_ability: gen3.Ability) @This() {
+        return .{
+            .hp_iv = mon_ability.hp_iv,
+            .attack_iv = mon_ability.attack_iv,
+            .defense_iv = mon_ability.defense_iv,
+            .speed_iv = mon_ability.speed_iv,
+            .special_attack_iv = mon_ability.special_attack_iv,
+            .special_defense_iv = mon_ability.special_defense_iv,
+            .egg = mon_ability.egg,
+            .ability = mon_ability.ability
+        };
+    }
 };
 
 pub const Ribbons = packed struct {
@@ -210,10 +267,34 @@ pub const Ribbons = packed struct {
     earth: bool,
     world: bool,
     padding0: u4,
-    obedience: bool
+    obedience: bool,
+
+    fn fromMon(mon_ribbons: gen3.Ribbons) @This() {
+        return .{
+            .cool = mon_ribbons.cool,
+            .beauty = mon_ribbons.beauty,
+            .cute = mon_ribbons.cute,
+            .smart = mon_ribbons.smart,
+            .tough = mon_ribbons.tough,
+            .champion = mon_ribbons.champion,
+            .winning = mon_ribbons.winning,
+            .victory = mon_ribbons.victory,
+            .artist = mon_ribbons.artist,
+            .effort = mon_ribbons.effort,
+            .battle_champion = mon_ribbons.battle_champion,
+            .regional_champion = mon_ribbons.regional_champion,
+            .national_champion = mon_ribbons.national,
+            .country = mon_ribbons.country,
+            .national = mon_ribbons.national,
+            .earth = mon_ribbons.earth,
+            .world = mon_ribbons.world,
+            .padding0 = 0,
+            .obedience = mon_ribbons.obedience
+        };
+    }
 };
 
-pub const MiscBlock = struct {
+pub const MiscBlock = packed struct {
     pokerus: u8,
     met_location: u8,
     origins: Origins,
@@ -230,6 +311,10 @@ pub const MiscBlock = struct {
             .ribbons = @bitCast(decrypted[8..12].*)
         };
     }
+
+    pub fn toBytes(self: *const @This()) [12]u8 {
+        return @bitCast(self.*);
+    }
 };
 
 pub const MiscFlags = packed struct {
@@ -237,7 +322,17 @@ pub const MiscFlags = packed struct {
     has_species: bool,
     use_egg_name: bool,
     block_box_rs: bool,
-    padding0: u4
+    padding0: u4,
+
+    fn fromMonFlags(mon_misc_flags: gen3.MiscFlags) @This() {
+        return .{
+            .is_bad_egg = mon_misc_flags.is_bad_egg,
+            .has_species = mon_misc_flags.has_species,
+            .use_egg_name = mon_misc_flags.use_egg_name,
+            .block_box_rs = mon_misc_flags.block_box_rs,
+            .padding0 = 0
+        };
+    }
 };
 
 pub const StrippedMonData = struct {
@@ -267,6 +362,96 @@ pub const StrippedMonData = struct {
         };
     }
 
+    pub fn fromMon(mon: gen3.Mon) @This() {
+        var ot_name: [7]u8 = undefined;
+        std.mem.copyForwards(u8, &ot_name, &encoding.utf8ToGen3(mon.base_data.ot_name));
+
+        const misc_block: MiscBlock = .{
+            .ability = Ability.fromMon(mon.base_data.iv_egg_ability),
+            .met_location = mon.base_data.met_location,
+            .origins = Origins.fromMon(mon.base_data.origins_info),
+            .pokerus = mon.base_data.pokerus,
+            .ribbons = Ribbons.fromMon(mon.base_data.ribbons_obedience)
+        };
+
+        const attack_block: AttackBlock = .{
+            .move1 = mon.base_data.moves[0].?.id,
+            .move2 = mon.base_data.moves[1].?.id,
+            .move3 = mon.base_data.moves[2].?.id,
+            .move4 = mon.base_data.moves[3].?.id,
+            .pp1 = mon.base_data.pps[0],
+            .pp2 = mon.base_data.pps[1],
+            .pp3 = mon.base_data.pps[2],
+            .pp4 = mon.base_data.pps[3]
+        };
+
+        const ev_block: EVConditionBlock = .{
+            .attack_ev = mon.base_data.ev.attack,
+            .defense_ev = mon.base_data.ev.defense,
+            .speed_ev = mon.base_data.ev.speed,
+            .special_attack_ev = mon.base_data.ev.special_attack,
+            .special_defense_ev = mon.base_data.ev.special_defense,
+            .hp_ev = mon.base_data.ev.hp,
+            .beauty = mon.base_data.contest_stats.beauty,
+            .coolness = mon.base_data.contest_stats.coolness,
+            .cuteness = mon.base_data.contest_stats.cuteness,
+            .feel = mon.base_data.contest_stats.feel,
+            .smartness = mon.base_data.contest_stats.smartness,
+            .toughness = mon.base_data.contest_stats.toughness
+        };
+
+        const growth_block: GrowthBlock = .{
+            .dex_number = mon.base_data.dex_number,
+            .experience = mon.base_data.experience,
+            .friendship = mon.base_data.friendship,
+            .item_held = mon.base_data.friendship,
+            .padding = 0,
+            .pp_bonuses = .{
+                .move1 = mon.base_data.pp_bonuses[0],
+                .move2 = mon.base_data.pp_bonuses[1],
+                .move3 = mon.base_data.pp_bonuses[2],
+                .move4 = mon.base_data.pp_bonuses[3]
+            }
+        };
+
+        const growth_block_bytes = growth_block.toBytes();
+        const attack_block_bytes = attack_block.toBytes();
+        const misc_block_bytes = misc_block.toBytes();
+        const ev_block_bytes = ev_block.toBytes();
+
+        const checksum = calculate_checksum_for_byte_blocks(.{growth_block_bytes, attack_block_bytes, misc_block_bytes, ev_block_bytes});
+
+        const encrypted_growth_block = encrypt(mon.base_data.personality_value, mon.base_data.ot_id, growth_block_bytes);
+        const encrypted_attack_block = encrypt(mon.base_data.personality_value, mon.base_data.ot_id, attack_block_bytes);
+        const encrypted_misc_block = encrypt(mon.base_data.personality_value, mon.base_data.ot_id, misc_block_bytes);
+        const encrypted_ev_block = encrypt(mon.base_data.personality_value, mon.base_data.ot_id, ev_block_bytes);
+
+        var data: [48]u8 = undefined;
+
+        const growth_block_start = getBlockNumber(mon.base_data.personality_value, 'G') * 12;
+        const attack_block_start = getBlockNumber(mon.base_data.personality_value, 'A') * 12;
+        const misc_block_start = getBlockNumber(mon.base_data.personality_value, 'M') * 12;
+        const ev_block_start = getBlockNumber(mon.base_data.personality_value, 'E') * 12;
+
+        std.mem.copyForwards(u8, data[growth_block_start..growth_block_start + 12], &encrypted_growth_block);
+        std.mem.copyForwards(u8, data[attack_block_start..attack_block_start + 12], &encrypted_attack_block);
+        std.mem.copyForwards(u8, data[misc_block_start..misc_block_start + 12], &encrypted_misc_block);
+        std.mem.copyForwards(u8, data[ev_block_start..ev_block_start + 12], &encrypted_ev_block);
+
+        return .{
+            .personality_value = mon.base_data.personality_value,
+            .ot_id = mon.base_data.ot_id,
+            .nickname = encoding.utf8ToGen3(mon.base_data.nickname),
+            .language = @intFromEnum(mon.base_data.language),
+            .misc_flags = MiscFlags.fromMonFlags(mon.base_data.misc_flags),
+            .ot_name = ot_name,
+            .markings = mon.base_data.markings,
+            .checksum = checksum,
+            .unknown0 = 0,
+            .data = data
+        };
+    }
+
     fn getBlockOrderIndex(self: *const@This()) u8 {
         return @intCast(@mod(self.personality_value, 24));
     }
@@ -287,6 +472,37 @@ pub const StrippedMonData = struct {
         return result;
     }
 
+    fn calculate_checksum_for_byte_blocks(byte_blocks: [4][12]u8) u16 {
+        var result: u16 = 0;
+        const block1: [6]u16 = @bitCast(byte_blocks[0]);
+        const block2: [6]u16 = @bitCast(byte_blocks[1]);
+        const block3: [6]u16 = @bitCast(byte_blocks[2]);
+        const block4: [6]u16 = @bitCast(byte_blocks[3]);
+        const blocks: [4][6]u16 = .{block1, block2, block3, block4};
+        for (blocks) |block| {
+            for (block) |word| {
+                result +%= word;
+            }
+        }
+
+        return result;
+    }
+
+    fn toBytes(self: *const @This()) [stripped_mon_size]u8 {
+        var result: [stripped_mon_size]u8 = undefined;
+        copyForwards(u8, result[0..4], &asBytes(self.personality_value));
+        copyForwards(u8, result[4..8], asBytes(self.ot_id));
+        copyForwards(u8, result[8..18], &self.nickname);
+        result[18] = self.language;
+        result[19] = @bitCast(self.misc_flags);
+        copyForwards(u8, result[20..27], &self.ot_name);
+        result[27] = self.markings;
+        copyForwards(u8, result[28..30], &asBytes(self.checksum));
+        copyForwards(u8, result[30..32], &asBytes(self.unknown0));
+        copyForwards(u8, result[32..80], &self.data);
+        return result;
+    }
+
 };
 
 pub const StatusCondition = packed struct {
@@ -296,7 +512,19 @@ pub const StatusCondition = packed struct {
     freeze: bool,
     paralysis: bool,
     bad_poison: bool,
-    padding0: u24
+    padding0: u24,
+
+    fn allOk() @This() {
+        return .{
+            .sleep = 0,
+            .poison = false,
+            .burn = false,
+            .freeze = false,
+            .paralysis = false,
+            .bad_poison = false,
+            .padding= 0
+        };
+    }
 };
 
 pub const MonData = struct {
@@ -328,11 +556,60 @@ pub const MonData = struct {
         };
     }
 
+    fn toBytes(self: *const @This()) [full_mon_size]u8 {
+        var result: [full_mon_size]u8 = undefined;
+        copyForwards(u8, result[0..80], self.stripped_mon_data.toBytes()[0..]);
+        copyForwards(u8, result[80..84], asBytes(self.status_condition));
+        result[84] = self.level;
+        result[85] = self.mail_id;
+        copyForwards(u8, result[86..88], &asBytes(self.current_hp));
+        copyForwards(u8, result[88..90], &asBytes(self.total_hp));
+        copyForwards(u8, result[90..92], &asBytes(self.attack));
+        copyForwards(u8, result[92..94], &asBytes(self.defense));
+        copyForwards(u8, result[94..96], &asBytes(self.speed));
+        copyForwards(u8, result[96..98], &asBytes(self.special_attack));
+        copyForwards(u8, result[98..100], &.asBytes(self.special_defense));
+        return result;
+    }
+
+    pub fn fromMon(mon: gen3.Mon) @This() {
+        return .{
+            .stripped_mon_data = StrippedMonData.fromMon(mon),
+            .status_condition = StatusCondition.allOk(),
+            .level = mon.stats.level,
+            .mail_id = mon.stats.mail_id,
+            .current_hp = mon.stats.current_hp,
+            .total_hp = mon.stats.total_hp,
+            .attack = mon.stats.attack,
+            .defense = mon.stats.defense,
+            .speed = mon.stats.speed,
+            .special_attack = mon.stats.special_attack,
+            .special_defense = mon.stats.special_defense
+        };
+    }
+
 };
 
 pub const FullPartyData = struct {
     number_of_mon: u8,
-    mons: [6]MonData
+    mons: [6]MonData,
+
+    pub fn init(bytes: []const u8) @This() {
+        const party_section_start = getSectionStart(bytes, party_section_id);
+        const mon_start = party_section_start + party_mons_offset;
+        const mon_bytes = bytes[mon_start..mon_start + 600];
+        return .{
+            .number_of_mon = bytes[party_section_start + party_offset],
+            .mons =
+            .{MonData.fromBytes(mon_bytes[0..100].*), MonData.fromBytes(mon_bytes[100..200].*),
+                MonData.fromBytes(mon_bytes[200..300].*), MonData.fromBytes(mon_bytes[300..400].*),
+                MonData.fromBytes(mon_bytes[400..500].*), MonData.fromBytes(mon_bytes[500..600].*)},
+        };
+    }
+
+    pub fn toBytes(self: *const @This()) [party_mon_details_size]u8 {
+        _ = self;
+    }
 };
 
 pub fn getLatestSave(bytes: []const u8) u1 {
@@ -381,20 +658,6 @@ pub fn getBoxBytes(bytes: []const u8) [boxes_total_size]u8 {
     return result;
 }
 
-pub fn getFullPartyData(bytes: []const u8) FullPartyData {
-    const party_section_start = getSectionStart(bytes, party_section_id);
-    const mon_start = party_section_start + party_mons_offset;
-    const mon_bytes = bytes[mon_start..mon_start + 600];
-    return .{
-        .number_of_mon = bytes[party_section_start + party_offset],
-        .mons =
-            .{MonData.fromBytes(mon_bytes[0..100].*), MonData.fromBytes(mon_bytes[100..200].*),
-              MonData.fromBytes(mon_bytes[200..300].*), MonData.fromBytes(mon_bytes[300..400].*),
-              MonData.fromBytes(mon_bytes[400..500].*), MonData.fromBytes(mon_bytes[500..600].*)},
-    };
-
-}
-
 pub const FullBoxData = struct {
     number_of_mons: u8,
     mons: [mon_per_box]StrippedMonData,
@@ -427,3 +690,4 @@ pub const FullBoxData = struct {
         };
     }
 };
+
