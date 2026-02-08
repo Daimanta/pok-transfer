@@ -10,6 +10,7 @@ const pok_transfer = @import("../root.zig");
 pub const save_size = gen3_data.save_size;
 pub const number_of_boxes = 14;
 pub const box_size = 30;
+pub const party_size = 6;
 
 pub const gen3_species_data: *align (1) const[386]MonSpecies = std.mem.bytesAsValue([386]MonSpecies, @embedFile("species.dat"));
 
@@ -29,6 +30,17 @@ pub const ContestStats = struct {
             .smartness = conditions.smartness,
             .toughness = conditions.toughness,
             .feel = conditions.feel
+        };
+    }
+
+    fn no_stats() @This() {
+        return .{
+            .coolness = 0,
+            .beauty = 0,
+            .cuteness = 0,
+            .smartness = 0,
+            .toughness = 0,
+            .feel = 0
         };
     }
 };
@@ -51,6 +63,69 @@ pub const EV = struct {
             .special_defense = ev_condition.special_defense_ev,
         };
     }
+
+    fn fromGen1(ev: @import("../gen1/mon.zig").EV) @This() {
+        var new_hp_ev = ev.hp / 256;
+        var new_attack_ev = ev.attack / 256;
+        var new_defense_ev = ev.defense / 256;
+        var new_speed_ev = ev.speed / 256;
+        var new_special_attack_ev = ev.special / 256;
+        var new_special_defense_ev = ev.special / 256;
+
+        const ev_sum = new_hp_ev + new_attack_ev + new_defense_ev + new_speed_ev + new_special_attack_ev + new_special_defense_ev;
+        if (ev_sum > 510) {
+            const factor: f64 = 510.0 / @as(f64, @floatFromInt(ev_sum));
+            new_hp_ev = factor_ev(new_hp_ev, factor);
+            new_attack_ev = factor_ev(new_attack_ev, factor);
+            new_defense_ev = factor_ev(new_defense_ev, factor);
+            new_speed_ev = factor_ev(new_speed_ev, factor);
+            new_special_attack_ev = factor_ev(new_special_attack_ev, factor);
+            new_special_defense_ev = factor_ev(new_special_defense_ev, factor);
+        }
+        
+        return .{
+            .hp = @intCast(new_hp_ev),
+            .attack = @intCast(new_attack_ev),
+            .defense = @intCast(new_defense_ev),
+            .speed = @intCast(new_speed_ev),
+            .special_attack = @intCast(new_special_attack_ev),
+            .special_defense = @intCast(new_special_defense_ev),
+        };
+        
+    }
+    
+    fn fromGen2(ev: @import("../gen2GS/mon.zig").EV) @This() {
+        var new_hp_ev = ev.hp / 256;
+        var new_attack_ev = ev.attack / 256;
+        var new_defense_ev = ev.defense / 256;
+        var new_speed_ev = ev.speed / 256;
+        var new_special_attack_ev = ev.special / 256;
+        var new_special_defense_ev = ev.special / 256;
+
+        const ev_sum = new_hp_ev + new_attack_ev + new_defense_ev + new_speed_ev + new_special_attack_ev + new_special_defense_ev;
+        if (ev_sum > 510) {
+            const factor: f64 = 510.0 / @as(f64, @floatFromInt(ev_sum));
+            new_hp_ev = factor_ev(new_hp_ev, factor);
+            new_attack_ev = factor_ev(new_attack_ev, factor);
+            new_defense_ev = factor_ev(new_defense_ev, factor);
+            new_speed_ev = factor_ev(new_speed_ev, factor);
+            new_special_attack_ev = factor_ev(new_special_attack_ev, factor);
+            new_special_defense_ev = factor_ev(new_special_defense_ev, factor);
+        }
+
+        return .{
+            .hp = @intCast(new_hp_ev),
+            .attack = @intCast(new_attack_ev),
+            .defense = @intCast(new_defense_ev),
+            .speed = @intCast(new_speed_ev),
+            .special_attack = @intCast(new_special_attack_ev),
+            .special_defense = @intCast(new_special_defense_ev),
+        };
+    }
+
+    fn factor_ev(val: u16, factor: f64) u16 {
+        return @intFromFloat(@as(f64, @floatFromInt(val)) * factor);
+    }
 };
 
 pub const IV = struct {
@@ -70,6 +145,26 @@ pub const Language = enum(u8) {
     GERMAN = 5,
     UNUSED = 6,
     SPANISH = 7
+};
+
+pub const SpeciesType = enum(u8) {
+    NORMAL = 0,
+    FIGHTING = 1,
+    FLYING = 2,
+    POISON = 3,
+    GROUND = 4,
+    ROCK = 5,
+    BUG = 6,
+    GHOST = 7,
+    STEEL = 8,
+    FIRE = 10,
+    WATER = 11,
+    GRASS = 12,
+    ELECTRIC = 13,
+    PSYCHIC = 14,
+    ICE = 15,
+    DRAGON = 16,
+    DARK = 17,
 };
 
 pub const StatTypes = enum {
@@ -93,6 +188,16 @@ pub const MiscFlags = struct {
             .has_species = misc_flags.has_species,
             .use_egg_name = misc_flags.use_egg_name,
             .block_box_rs = misc_flags.block_box_rs
+        };
+    }
+
+    // Regular mon, no special properties
+    pub fn regular_mon() @This() {
+        return .{
+            .is_bad_egg = false,
+            .has_species = true,
+            .use_egg_name = false,
+            .block_box_rs = false
         };
     }
 };
@@ -133,10 +238,10 @@ pub const Gender = enum {
 pub const MonBaseData = struct {
     personality_value: u32,
     ot_id: u32,
-    nickname: []u8,
+    nickname: []const u8,
     language: Language,
     misc_flags: MiscFlags,
-    ot_name: []u8,
+    ot_name: []const u8,
     markings: u8,
     checksum: u16,
     unknown0: u16,
@@ -274,6 +379,35 @@ pub const StatusCondition = struct {
             .bad_poison = status_condition.bad_poison
         };
     }
+
+    pub fn allOk() @This() {
+        return .{
+            .sleep = 0,
+            .poison = false,
+            .burn = false,
+            .freeze = false,
+            .paralysis = false,
+            .bad_poison = false
+        };
+    }
+
+    fn toString(self: *const @This()) []const u8 {
+        if (self.sleep > 0) {
+            return "SLEEP";
+        } else if (self.poison) {
+            return "POISON";
+        } else if (self.burn) {
+            return "BURN";
+        } else if (self.freeze) {
+            return "FREEZE";
+        } else if (self.paralysis) {
+            return "PARALYSIS";
+        } else if (self.bad_poison) {
+            return "BAD POISON";
+        } else {
+            return "-";
+        }
+    }
 };
 
 pub const Ability = struct {
@@ -356,6 +490,29 @@ pub const Ribbons = struct {
             .earth= ribbons.earth,
             .world= ribbons.world,
             .obedience= ribbons.obedience,
+        };
+    }
+
+    fn no_ribbons() @This() {
+        return .{
+            .cool = 0,
+            .beauty= 0,
+            .cute= 0,
+            .smart= 0,
+            .tough= 0,
+            .champion= false,
+            .winning= false,
+            .victory= false,
+            .artist= false,
+            .effort= false,
+            .battle_champion= false,
+            .regional_champion= false,
+            .national_champion= false,
+            .country= false,
+            .national= false,
+            .earth= false,
+            .world= false,
+            .obedience= false,
         };
     }
 };
@@ -469,7 +626,12 @@ pub const MonBox = struct {
     }
 
     pub fn printSummary(self: *const @This()) void {
-        _ = self;
+        pok_transfer.bufferedPrint("Box number: {d}\nNumber of mon: {d}\n", .{self.box_number, self.number_of_mon});
+        var i: usize = 0;
+        while (i < self.number_of_mon): (i += 1) {
+            pok_transfer.bufferedPrint("{d}) ", .{i + 1});
+            self.mons[i].printShortSummary();
+        }
     }
 };
 
@@ -505,19 +667,21 @@ pub const CaughtMon = struct {
     }
 
     pub fn printSummary(self: *const@This()) void {
-        _ = self;
+        pok_transfer.bufferedPrint("National dex: {any}, Current box: {d}\nParty size: {d}\nBox 1 size: {d:<5}Box 2 size: {d:<5}Box 3 size: {d:<5}Box 4 size: {d:<5}\nBox 5 size: {d:<5}Box 6 size: {d:<5}Box 7 size: {d:<5}Box 8 size: {d:<5}\nBox 9 size: {d:<5}Box 10 size: {d:<4}Box 11 size: {d:<4}Box 12 size: {d:<4}\nBox 13 size: {d:<4}Box 14 size: {d:<4}",
+            .{self.national_dex, self.current_box + 1, self.party.number_of_mon,
+                self.boxes[0].number_of_mon, self.boxes[1].number_of_mon, self.boxes[2].number_of_mon, self.boxes[3].number_of_mon,
+                self.boxes[4].number_of_mon, self.boxes[5].number_of_mon, self.boxes[6].number_of_mon, self.boxes[7].number_of_mon,
+                self.boxes[8].number_of_mon, self.boxes[9].number_of_mon, self.boxes[10].number_of_mon, self.boxes[11].number_of_mon,
+                self.boxes[12].number_of_mon, self.boxes[13].number_of_mon
+            });
     }
 
     pub fn printMonDetails(self: *const@This(), box: ?u8, mon: u8) void {
-        _ = self; _ = box; _ = mon;
-    }
-
-    pub fn markForTransfer(self: *const@This(), box: ?u8, mon: u8) void {
-        _ = self; _ = box; _ = mon;
-    }
-
-    pub fn unmarkForTransfer(self: *const@This(), box: ?u8, mon: u8) void {
-        _ = self; _ = box; _ = mon;
+        if (box == null) {
+            self.party.mons[mon].printFullSummary();
+        } else {
+            self.boxes[box.?].mons[mon].printFullSummary();
+        }
     }
 
     pub fn toSave(self: *const@This(), bytes: []u8) void {
@@ -529,12 +693,40 @@ pub const CaughtMon = struct {
         return .GEN3FRLG;
     }
 
-    pub fn removeMon(self: *const@This(), box: ?u8, mon: u8) void {
-        _ = self; _ = box; _ = mon;
+    pub fn removeMon(self: *@This(), box: ?u8, mon: u8) void {
+        if (box == null) {
+            if (box.? != party_size - 1) {
+                var i: usize = @intCast(mon);
+                while (i < party_size - 1): (i += 1) {
+                    self.party.mons[i] = self.party.mons[i + 1];
+                }
+            }
+            self.party.number_of_mon -= 1;
+        } else {
+            if (mon != box_size - 1) {
+                var i: usize = mon;
+                while (i < box_size - 1): (i += 1) {
+                    self.boxes[box.?].mons[i] = self.boxes[box.?].mons[i + 1];
+                }
+            }
+            self.boxes[box.?].number_of_mon -= 1;
+        }
     }
 
-    pub fn insertMon(self: *const@This(), mon: interface.MonInterface) !void {
-        _ = self; _ = mon;
+    pub fn insertMon(self: *@This(), mon: interface.MonInterface) !void {
+        var i: usize = 0;
+        const mon_insert = try Mon.fromMonInterface(mon);
+        if (mon_insert.base_data.dex_number > 151 and !self.national_dex) {
+            return error.NationalDexNotUnlocked;
+        }
+
+        while(i < 12): (i += 1) {
+            if (self.boxes[i].number_of_mon < 20) {
+                self.boxes[i].mons[self.boxes[i].number_of_mon] = mon_insert;
+                self.boxes[i].number_of_mon += 1;
+                return;
+            }
+        }
     }
 
     pub fn getFreeSpace(self: *const@This()) u16 {
@@ -700,8 +892,184 @@ pub const Mon = struct {
         };
     }
 
+    fn fromGen1(mon: @import("../gen1/mon.zig").Mon) @This() {
+        const ot_id_bytes = std.mem.asBytes(&mon.base_data.ot_number);
+        const randomness = std.crypto.hash.Md5.hashResult(&[_]u8{mon.base_data.ivs.special, mon.base_data.ivs.attack, mon.base_data.ivs.defense, mon.base_data.ivs.speed, ot_id_bytes[0], ot_id_bytes[1]});
+        const personality_value: u32 = @bitCast(randomness[0..4].*);
+        const ev_randomness = randomness[4];
+
+
+        return Mon{
+              .base_data = .{
+                    .personality_value = personality_value,
+                    .ot_id = enrich_ot_id(mon.base_data.ot_number),
+                    .nickname = mon.base_data.name,
+                    .language = .ENGLISH,
+                    .misc_flags = MiscFlags.regular_mon(),
+                    .ot_name = mon.base_data.ot_name,
+                    .markings = 0,
+                    .checksum = 0, // should be fixed during conversion
+                    .unknown0 = 0,
+                    .dex_number = mon.base_data.dex_number,
+                    .item_held = 0,
+                    .experience = mon.base_data.experience_points,
+                    .pp_bonuses = .{mon.base_data.move_pps[0].applied_pp_up, mon.base_data.move_pps[1].applied_pp_up, mon.base_data.move_pps[2].applied_pp_up, mon.base_data.move_pps[3].applied_pp_up},
+                    .friendship = 70,
+                    .moves = mon.base_data.moves,
+                    .pps = .{mon.base_data.move_pps[0].current_pp, mon.base_data.move_pps[1].current_pp, mon.base_data.move_pps[2].current_pp, mon.base_data.move_pps[3].current_pp},
+                    .ev = EV.fromGen1(mon.base_data.evs),
+                    .contest_stats = ContestStats.no_stats(),
+                    .pokerus = 0,
+                    .met_location = 254, //in-game trade
+                    .origins_info = .{
+                      .level_met = @intCast(mon.base_data.level),
+                      .origin_game = 4, // Fire Red
+                      .pokeball_type = 4, // standard ball
+                      .trainer_is_female = false
+                  },
+                    .iv_egg_ability = .{
+                        .hp_iv = mon.base_data.ivs.special * 2 + getRandomness(ev_randomness, 0),
+                        .attack_iv = mon.base_data.ivs.attack * 2 + getRandomness(ev_randomness, 1),
+                        .defense_iv = mon.base_data.ivs.defense * 2 + getRandomness(ev_randomness, 2),
+                        .speed_iv = mon.base_data.ivs.speed * 2 + getRandomness(ev_randomness, 3),
+                        .special_attack_iv = mon.base_data.ivs.special * 2 + getRandomness(ev_randomness, 4),
+                        .special_defense_iv = mon.base_data.ivs.special * 2 + getRandomness(ev_randomness, 5),
+                        .egg = false,
+                        .ability = 0
+                    },
+                    .ribbons_obedience = Ribbons.no_ribbons(),
+              },
+              .stats = .{
+                    .status_condition = StatusCondition.allOk(),
+                    .level = mon.base_data.level,
+                    .mail_id = 255, //empty
+                    .current_hp = mon.stats.max_hp,
+                    .total_hp = mon.stats.max_hp,
+                    .attack = mon.stats.attack,
+                    .defense = mon.stats.defense,
+                    .speed = mon.stats.speed,
+                    .special_attack = mon.stats.special,  // v
+                    .special_defense = mon.stats.special, // These values are not correct but not used in box and recalculated when removed from box
+              }
+        };
+    }
+
+    fn fromGen2(mon: @import("../gen2GS/mon.zig").Mon) @This() {
+        const ot_id_bytes = std.mem.asBytes(&mon.base_data.ot_number);
+        const randomness = std.crypto.hash.Md5.hashResult(&[_]u8{mon.base_data.ivs.special, mon.base_data.ivs.attack, mon.base_data.ivs.defense, mon.base_data.ivs.speed, ot_id_bytes[0], ot_id_bytes[1]});
+        const personality_value: u32 = @bitCast(randomness[0..4].*);
+        const ev_randomness = randomness[4];
+
+        return Mon{
+            .base_data = .{
+                .personality_value = personality_value,
+                .ot_id = enrich_ot_id(mon.base_data.ot_number),
+                .nickname = mon.base_data.name,
+                .language = .ENGLISH,
+                .misc_flags = MiscFlags.regular_mon(),
+                .ot_name = mon.base_data.ot_name,
+                .markings = 0,
+                .checksum = 0, // should be fixed during conversion
+                .unknown0 = 0,
+                .dex_number = mon.base_data.dex_number,
+                .item_held = 0,
+                .experience = mon.base_data.experience_points,
+                .pp_bonuses = .{mon.base_data.move_pps[0].applied_pp_up, mon.base_data.move_pps[1].applied_pp_up, mon.base_data.move_pps[2].applied_pp_up, mon.base_data.move_pps[3].applied_pp_up},
+                .friendship = 70,
+                .moves = mon.base_data.moves,
+                .pps = .{mon.base_data.move_pps[0].current_pp, mon.base_data.move_pps[1].current_pp, mon.base_data.move_pps[2].current_pp, mon.base_data.move_pps[3].current_pp},
+                .ev = EV.fromGen2(mon.base_data.evs),
+                .contest_stats = ContestStats.no_stats(),
+                .pokerus = 0,
+                .met_location = 254, //in-game trade
+                .origins_info = .{
+                    .level_met = @intCast(mon.base_data.level),
+                    .origin_game = 4, // Fire Red
+                      .pokeball_type = 4, // standard ball
+                      .trainer_is_female = false
+                },
+                .iv_egg_ability = .{
+                    .hp_iv = mon.base_data.ivs.special * 2 + getRandomness(ev_randomness, 0),
+                    .attack_iv = mon.base_data.ivs.attack * 2 + getRandomness(ev_randomness, 1),
+                    .defense_iv = mon.base_data.ivs.defense * 2 + getRandomness(ev_randomness, 2),
+                    .speed_iv = mon.base_data.ivs.speed * 2 + getRandomness(ev_randomness, 3),
+                    .special_attack_iv = mon.base_data.ivs.special * 2 + getRandomness(ev_randomness, 4),
+                    .special_defense_iv = mon.base_data.ivs.special * 2 + getRandomness(ev_randomness, 5),
+                    .egg = false,
+                    .ability = 0
+                },
+                .ribbons_obedience = Ribbons.no_ribbons(),
+            },
+            .stats = .{
+                .status_condition = StatusCondition.allOk(),
+                .level = mon.base_data.level,
+                .mail_id = 255, //empty
+                    .current_hp = mon.stats.max_hp,
+                .total_hp = mon.stats.max_hp,
+                .attack = mon.stats.attack,
+                .defense = mon.stats.defense,
+                .speed = mon.stats.speed,
+                .special_attack = mon.stats.special_attack,
+                    .special_defense = mon.stats.special_defense,
+              }
+        };
+    }
+
+    pub fn fromMonInterface(mon_interface: interface.MonInterface) !@This() {
+        switch (mon_interface) {
+            .gen1 => {
+                return fromGen1(mon_interface.gen1);
+            },
+            .gen2gs => {
+                return fromGen2(mon_interface.gen2gs);
+            },
+            .gen3frlg => {
+                return mon_interface.gen3frlg;
+            }
+        }
+
+    }
+
     pub fn printFullSummary(self: *const @This()) void {
-        pok_transfer.bufferedPrint("{s}, lvl. {d} {s} {s}\n", .{self.base_data.nickname, self.stats.level, @import("../general/names.zig").mon_names[self.base_data.dex_number - 1], self.getGenderSymbol()});
+        const type_name = @import("../general/names.zig").mon_names[self.base_data.dex_number - 1];
+        const condition:[]const u8 = self.stats.status_condition.toString();
+        const species = gen3_species_data[self.base_data.dex_number - 1];
+
+        pok_transfer.bufferedPrint("{s}, lvl. {d} {s} {s}", .{self.base_data.nickname, self.stats.level, type_name, self.getGenderSymbol()});
+        if (species.type1 != species.type2) {
+            pok_transfer.bufferedPrint("({s}/{s})", .{@tagName(@as(SpeciesType, @enumFromInt(species.type1))), @tagName(@as(SpeciesType, @enumFromInt(species.type2)))});
+        } else {
+            pok_transfer.bufferedPrint("({s})", .{@tagName(@as(SpeciesType, @enumFromInt(species.type1)))});
+        }
+
+        const hp_exp = "HP: {d}/{d} Exp: {d} Condition: {s}";
+        const ot = "OT: {s} ({d}) Friendship: {d}/255";
+        const moves_str = "Move 1: {s} Move 2: {s}\nMove 3: {s} Move 4: {s}";
+        const stats = "HP: {d} Attack: {d} Defense: {d} Speed: {d} Special Attack: {d} Special Defense {d}";
+        const ivs = "Attack IV: {d} Defense IV: {d} Speed IV: {d} Special Attack IV: {d} Special Defense IV: {d}";
+        const evs = "HP EV: {d} Attack EV: {d} Defense EV: {d} Speed EV: {d} Special Attack EV: {d} Special Defense EV: {d}";
+        const contest_stats_str = "Coolness: {d} Beauty: {d} Cuteness: {d} Smartness: {d} Toughness: {d} Feel: {d}";
+
+        const iv_obj = self.base_data.iv_egg_ability;
+        const ev_obj = self.base_data.ev;
+        const contest_stats = self.base_data.contest_stats;
+
+        const move1_str = if (self.base_data.moves[0] != null) self.base_data.moves[0].?.name else "-";
+        const move2_str = if (self.base_data.moves[1] != null) self.base_data.moves[1].?.name else "-";
+        const move3_str = if (self.base_data.moves[2] != null) self.base_data.moves[2].?.name else "-";
+        const move4_str = if (self.base_data.moves[3] != null) self.base_data.moves[3].?.name else "-";
+
+        pok_transfer.bufferedPrint( "\n" ++ hp_exp ++ "\n" ++ ot ++ "\n" ++ moves_str ++ "\n" ++ stats ++ "\n" ++ ivs ++ "\n" ++ evs, .{
+            self.stats.current_hp, self.stats.total_hp, self.base_data.experience, condition,
+            self.base_data.ot_name, self.base_data.ot_id, self.base_data.friendship,
+            move1_str, move2_str, move3_str, move4_str,
+            self.stats.total_hp, self.stats.attack, self.stats.defense, self.stats.speed, self.stats.special_attack, self.stats.special_defense,
+            iv_obj.attack_iv, iv_obj.defense_iv, iv_obj.speed_iv, iv_obj.special_attack_iv, iv_obj.special_defense_iv,
+            ev_obj.hp, ev_obj.attack, ev_obj.defense, ev_obj.speed, ev_obj.special_attack, ev_obj.special_defense
+            });
+
+        pok_transfer.bufferedPrint("\n" ++ contest_stats_str, .{
+            contest_stats.coolness, contest_stats.beauty, contest_stats.cuteness, contest_stats.smartness, contest_stats.toughness, contest_stats.feel});
     }
 
     pub fn printShortSummary(self: *const @This()) void {
@@ -719,3 +1087,14 @@ pub const Mon = struct {
         }
     }
 };
+
+fn enrich_ot_id(old_ot_id: u16) u32 {
+    const secret_source = std.crypto.hash.Md5.hashResult(std.mem.asBytes(&old_ot_id));
+    const secret = secret_source[14..16][0..2].*;
+    const secret_word: u16 = @bitCast(secret);
+    return (@as(u32, old_ot_id) << 16) + secret_word;
+}
+
+fn getRandomness(randomness_byte: u8, bit: u3) u1 {
+    return @intCast((randomness_byte >> bit) & 1);
+}

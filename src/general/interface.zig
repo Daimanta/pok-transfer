@@ -92,26 +92,28 @@ pub const CaughtMonInterface = union(enum) {
     }
 
     pub fn markForTransfer(self: *CaughtMonInterface, box: ?u8, mon: u8) void {
-        switch (self.*) {
-            .gen1 => self.gen1.markForTransfer(box, mon),
-            .gen2gs => self.gen2gs.markForTransfer(box, mon),
-            .gen3frlg => self.gen3frlg.markForTransfer(box, mon)
+        var move_mon = self.getMoveMon();
+        if (box != null) {
+            move_mon.box_mon[box.?][mon] = true;
+        } else {
+            move_mon.party_mon[mon] = true;
         }
     }
 
       pub fn unmarkForTransfer(self: *CaughtMonInterface, box: ?u8, mon: u8) void {
-          switch (self.*) {
-              .gen1 => self.gen1.unmarkForTransfer(box, mon),
-              .gen2gs => self.gen2gs.unmarkForTransfer(box, mon),
-              .gen3frlg => self.gen3frlg.unmarkForTransfer(box, mon),
+          var move_mon = self.getMoveMon();
+          if (box != null) {
+              move_mon.box_mon[box.?][mon] = false;
+          } else {
+              move_mon.party_mon[mon] = false;
           }
       }
 
-      pub fn getMoveMon(self: *CaughtMonInterface) MoveMon {
+      pub fn getMoveMon(self: *CaughtMonInterface) *MoveMon {
           return switch (self.*) {
-              .gen1 => self.gen1.move_mon,
-              .gen2gs => self.gen2gs.move_mon,
-              .gen3frlg => self.gen3frlg.move_mon
+              .gen1 => &self.gen1.move_mon,
+              .gen2gs => &self.gen2gs.move_mon,
+              .gen3frlg => &self.gen3frlg.move_mon
           };
       }
 

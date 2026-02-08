@@ -74,6 +74,16 @@ pub const EV = struct {
             .special = ev.special
         };
     }
+
+    fn fromGen3(ev: gen3.EV) @This() {
+        return .{
+            .hp = @as(u16, ev.hp) * 256,
+            .attack = @as(u16, ev.attack) * 256,
+            .defense = @as(u16, ev.defense) * 256,
+            .speed = @as(u16, ev.speed) * 256,
+            .special = @as(u16, ev.special_attack) * 256
+        };
+    }
 };
 
 pub const IV = struct {
@@ -88,6 +98,15 @@ pub const IV = struct {
             .defense = iv.defense,
             .speed = iv.speed,
             .special = iv.special
+        };
+    }
+
+    fn fromGen3(iv: gen3.Ability) @This() {
+        return .{
+            .attack = @intCast(iv.attack_iv / 2),
+            .defense = @intCast(iv.defense_iv / 2),
+            .speed = @intCast(iv.speed_iv / 2),
+            .special = @intCast(iv.special_attack_iv / 2)
         };
     }
 
@@ -120,6 +139,18 @@ pub const MonPP = struct {
             .applied_pp_up = gen1_monpp.applied_pp_up,
             .current_pp = gen1_monpp.current_pp
         };
+    }
+
+    fn fromGen3(pp_vals: [4]u8, pp_bonuses: [4]u2) [4]MonPP {
+        var result: [4]MonPP = undefined;
+        var i: usize = 0;
+        while (i < result.len): (i+=1) {
+            result[i] = .{
+                .current_pp = @intCast(pp_vals[i]),
+                .applied_pp_up = pp_bonuses[i]
+            };
+        }
+        return result;
     }
 };
 
@@ -342,9 +373,30 @@ pub const Mon = struct {
         };
     }
 
-    fn fromGen3(mon: gen3.Mon) @This() {
-        _ = mon;
-        unreachable;
+    fn fromGen3(mon: gen3.Mon) !@This() {
+        if (mon.base_data.dex_number > 251) return error.GenerationTooHigh;
+
+        const base_data: MonBaseData = .{
+            .dex_number = @intCast(mon.base_data.dex_number),
+            .name = mon.base_data.nickname,
+            .level = mon.stats.level,
+            .held_item = 0,
+            .moves = mon.base_data.moves,
+            .ot_number = @intCast(mon.base_data.ot_id >> 16),
+            .ot_name = mon.base_data.ot_name,
+            .experience_points = @intCast(mon.base_data.experience),
+            .evs = EV.fromGen3(mon.base_data.ev),
+            .ivs = IV.fromGen3(mon.base_data.iv_egg_ability),
+            .move_pps = MonPP.fromGen3(mon.base_data.pps, mon.base_data.pp_bonuses),
+            .friendship_eggcycles = default_friendship,
+            .pokerus = 0,
+            .caught_data = 0,
+        };
+
+        return Mon{
+            .base_data = base_data,
+            .stats = Stats.fromMonBaseData(base_data)
+        };
     }
 
     pub fn printFullSummary(self: *const @This()) void {
@@ -709,22 +761,6 @@ pub const CaughtMon = struct {
                 self.boxes[8].number_of_mon, self.boxes[9].number_of_mon, self.boxes[10].number_of_mon, self.boxes[11].number_of_mon,
                 self.boxes[12].number_of_mon, self.boxes[13].number_of_mon
             });
-    }
-
-    pub fn markForTransfer(self: *@This(), box: ?u8, mon: u8) void {
-        if (box != null) {
-            self.move_mon.box_mon[box.?][mon] = true;
-        } else {
-            self.move_mon.party_mon[mon] = true;
-        }
-    }
-
-    pub fn unmarkForTransfer(self: *@This(), box: ?u8, mon: u8) void {
-        if (box != null) {
-            self.move_mon.box_mon[box.?][mon] = false;
-        } else {
-            self.move_mon.party_mon[mon] = false;
-        }
     }
 
     pub fn getMon(self: *@This(), box: ?u8, mon: u8) Mon {

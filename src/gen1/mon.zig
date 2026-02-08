@@ -7,6 +7,7 @@ const StringBuilder = @import("../util/strings.zig").StringBuilder;
 const interface = @import("../general/interface.zig");
 const versions = @import("../general/versions.zig");
 const gen2 = @import("../gen2GS/mon.zig");
+const gen3 = @import("../gen3FRLG/mon.zig");
 
 pub const box_size = 20;
 pub const number_of_boxes = 12;
@@ -50,11 +51,28 @@ pub const MonPP = struct {
         };
     }
 
-    fn fromGen2(pps: gen2.MonPP) @This() {
-        return .{
-            .applied_pp_up = pps.applied_pp_up,
-            .current_pp = pps.current_pp
-        };
+    fn fromGen2(pps: [4]gen2.MonPP) [4]MonPP {
+        var result: [4]MonPP = undefined;
+        var i: usize = 0;
+        while (i < result.len): (i+=1) {
+            result[i] = .{
+                .current_pp = pps[i].current_pp,
+                .applied_pp_up = pps[i].applied_pp_up
+            };
+        }
+        return result;
+    }
+
+    fn fromGen3(pp_vals: [4]u8, pp_bonuses: [4]u2) [4]MonPP {
+        var result: [4]MonPP = undefined;
+        var i: usize = 0;
+        while (i < result.len): (i+=1) {
+            result[i] = .{
+                .current_pp = @intCast(pp_vals[i]),
+                .applied_pp_up = pp_bonuses[i]
+            };
+        }
+        return result;
     }
 };
 
@@ -86,6 +104,16 @@ pub const EV = struct {
             .special = ev.special
         };
     }
+
+    fn fromGen3(ev: gen3.EV) @This() {
+        return .{
+            .hp = @as(u16, ev.hp) * 256,
+            .attack = @as(u16, ev.attack) * 256,
+            .defense = @as(u16, ev.defense) * 256,
+            .speed = @as(u16, ev.speed) * 256,
+            .special = @as(u16, ev.special_attack) * 256
+        };
+    }
 };
 
 pub const IV = struct {
@@ -100,6 +128,15 @@ pub const IV = struct {
             .defense = iv.defense,
             .speed = iv.speed,
             .special = iv.special
+        };
+    }
+
+    fn fromGen3(iv: gen3.Ability) @This() {
+        return .{
+            .attack = @intCast(iv.attack_iv / 2),
+            .defense = @intCast(iv.defense_iv / 2),
+            .speed = @intCast(iv.speed_iv / 2),
+            .special = @intCast(iv.special_attack_iv / 2)
         };
     }
 };
@@ -453,10 +490,11 @@ pub const CaughtMon = struct {
     }
 
     pub fn insertMon(self: *@This(), mon: interface.MonInterface) !void {
+        const gen1mon = try fromMonInterface(mon);
         var i: usize = 0;
         while(i < 12): (i += 1) {
             if (self.boxes[i].number_of_mon < 20) {
-                self.boxes[i].mons[self.boxes[i].number_of_mon] = mon.gen1;
+                self.boxes[i].mons[self.boxes[i].number_of_mon] = gen1mon;
                 self.boxes[i].number_of_mon += 1;
                 return;
             }
@@ -473,9 +511,10 @@ pub const CaughtMon = struct {
 
 
     fn fromMonInterface(mon_interface: interface.MonInterface) !Mon {
-        const result = switch (mon_interface.*) {
+        const result = switch (mon_interface) {
             .gen1 => mon_interface.gen1,
-            .gen2gs => fromGen2(mon_interface.gen2gs)
+            .gen2gs => fromGen2(mon_interface.gen2gs),
+            .gen3frlg => fromGen3(mon_interface.gen3frlg),
         };
         return result;
     }
@@ -521,6 +560,46 @@ pub const CaughtMon = struct {
 
     }
 
+    fn fromGen3(gen3_mon: gen3.Mon) !Mon {
+        if (gen3_mon.base_data.dex_number > 151) return error.GenerationTooHigh;
+        if (gen3_mon.base_data.item_held > 0) return error.MonHasHeldItem;
+        for (gen3_mon.base_data.moves) |mmove|{
+            if (mmove != null and mmove.?.generation > 1) {
+                return error.MoveGenerationTooHigh;
+            }
+        }
+
+        const species_reference = gen1_species_data[gen3_mon.base_data.dex_number - 1];
+
+        const base_data: MonBaseData = .{
+            .dex_number = @intCast(gen3_mon.base_data.dex_number),
+            .name = gen3_mon.base_data.nickname,
+            .current_hp = gen3_mon.stats.current_hp,
+            .level = gen3_mon.stats.level,
+            .statuses = .{
+                .asleep = gen3_mon.stats.status_condition.sleep > 0,
+                .burned = gen3_mon.stats.status_condition.burn,
+                .frozen = gen3_mon.stats.status_condition.freeze,
+                .paralyzed = gen3_mon.stats.status_condition.paralysis,
+                .poisoned = gen3_mon.stats.status_condition.poison
+            },
+            .type1 = species_reference.type1,
+            .type2 = species_reference.type2,
+            .held_item = 0,
+            .moves = gen3_mon.base_data.moves,
+            .ot_number = @intCast(gen3_mon.base_data.ot_id >> 16),
+            .ot_name = gen3_mon.base_data.ot_name,
+            .experience_points = @truncate(gen3_mon.base_data.experience),
+            .evs = EV.fromGen3(gen3_mon.base_data.ev),
+            .ivs = IV.fromGen3(gen3_mon.base_data.iv_egg_ability),
+            .move_pps = MonPP.fromGen3(gen3_mon.base_data.pps, gen3_mon.base_data.pp_bonuses),
+        };
+        return Mon{
+            .base_data = base_data,
+            .stats = Stats.fromBaseData(base_data)
+        };
+    }
+
     // Removes a mon from the party, will affect the indices of the mon after the removed mon
     fn removeMonFromParty(self: *@This(), index: u8) Mon {
         // Last mon can simply be ignored
@@ -555,22 +634,6 @@ pub const CaughtMon = struct {
             free -= (box_size - box.number_of_mon);
         }
         return free;
-    }
-
-    pub fn markForTransfer(self: *@This(), box: ?u8, mon: u8) void {
-        if (box != null) {
-            self.move_mon.box_mon[box.?][mon] = true;
-        } else {
-            self.move_mon.party_mon[mon] = true;
-        }
-    }
-
-    pub fn unmarkForTransfer(self: *@This(), box: ?u8, mon: u8) void {
-        if (box != null) {
-            self.move_mon.box_mon[box.?][mon] = false;
-        } else {
-            self.move_mon.party_mon[mon] = false;
-        }
     }
 
     pub fn getMon(self: *@This(), box: ?u8, mon: u8) Mon {
