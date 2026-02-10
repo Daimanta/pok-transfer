@@ -879,6 +879,7 @@ fn fluctuating_level(xp: u32) u8 {
 fn medium_slow_level(xp: u32) u8 {
     if (xp < 9) return 1;
     if (xp < 57) return 2;
+    if (xp < 96) return 3; // prevents underflow of calculation for low levels
     var i: usize = 3;
     while (i <= 100): ( i += 1) {
         const required: usize = ((i*i*i)*6)/5 - (i*i)*15 + 100 * i - 140;
@@ -1136,11 +1137,11 @@ pub const Mon = struct {
     }
 };
 
-fn enrich_ot_id(old_ot_id: u16) u32 {
+pub fn enrich_ot_id(old_ot_id: u16) u32 {
     const secret_source = std.crypto.hash.Md5.hashResult(std.mem.asBytes(&old_ot_id));
     const secret = secret_source[14..16][0..2].*;
     const secret_word: u16 = @bitCast(secret);
-    return (@as(u32, old_ot_id) << 16) + secret_word;
+    return (@as(u32, secret_word) << 16) + old_ot_id;
 }
 
 fn getRandomness(randomness_byte: u8, bit: u3) u1 {

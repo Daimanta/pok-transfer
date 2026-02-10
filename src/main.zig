@@ -149,7 +149,7 @@ pub fn main() !void {
         interface.execute_move(&caught_source, &caught_destination.?);
         caught_source.toSave(source_bytes[0..caught_source.getSaveSize()]);
         caught_destination.?.toSave(destination_bytes_opt.?[0..caught_destination.?.getSaveSize()]);
-        replaceBytesInFile(source_file_location, source_bytes);
+        //replaceBytesInFile(source_file_location, source_bytes);
         replaceBytesInFile(destination_file_location.?, destination_bytes_opt.?);
     }
 
