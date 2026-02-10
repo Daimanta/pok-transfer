@@ -542,14 +542,14 @@ pub const Stats = struct {
         return .{
             .status_condition = StatusCondition.init(mon_data.status_condition),
             .level = mon_data.level,
-            .mail_id = mon_data.level,
+            .mail_id = mon_data.mail_id,
             .current_hp = mon_data.current_hp,
             .total_hp = mon_data.total_hp,
             .attack = mon_data.attack,
             .defense = mon_data.defense,
             .speed = mon_data.speed,
             .special_attack = mon_data.special_attack,
-            .special_defense = mon_data.defense,
+            .special_defense = mon_data.special_defense,
         };
     }
 
@@ -568,7 +568,7 @@ pub const Stats = struct {
                 .sleep = 0
             },
             .level = level,
-            .mail_id = 0,
+            .mail_id = 255, //empty
             .current_hp = total_hp,
             .total_hp = total_hp,
             .attack = calculate_other_stat(species.base_attack, mon_base_data.iv_egg_ability.attack_iv, mon_base_data.ev.attack, level, mon_base_data.getNatureMultiplier(.ATTACK)),
@@ -723,7 +723,7 @@ pub const CaughtMon = struct {
         var j: usize = 5;
         while (j < gen3_data.last_box_section_id): (j += 1) {
             const section_start = gen3_data.getSectionStart(bytes, @intCast(j));
-            const source_start= 4 + (i * gen3_data.box_section_size);
+            const source_start= (j - 5) * gen3_data.box_section_size;
             const source_end = source_start + gen3_data.box_section_size;
             std.mem.copyForwards(u8, bytes[section_start..], box_bytes[source_start..source_end]);
         }
@@ -780,7 +780,7 @@ pub const CaughtMon = struct {
     pub fn getFreeSpace(self: *const@This()) u16 {
         var free: u16 = number_of_boxes*box_size;
         for (self.boxes) |box| {
-            free -= (box_size - box.number_of_mon);
+            free -= box.number_of_mon;
         }
         return free;
     }
@@ -976,12 +976,12 @@ pub const Mon = struct {
                       .trainer_is_female = false
                   },
                     .iv_egg_ability = .{
-                        .hp_iv = mon.base_data.ivs.special * 2 + getRandomness(ev_randomness, 0),
-                        .attack_iv = mon.base_data.ivs.attack * 2 + getRandomness(ev_randomness, 1),
-                        .defense_iv = mon.base_data.ivs.defense * 2 + getRandomness(ev_randomness, 2),
-                        .speed_iv = mon.base_data.ivs.speed * 2 + getRandomness(ev_randomness, 3),
-                        .special_attack_iv = mon.base_data.ivs.special * 2 + getRandomness(ev_randomness, 4),
-                        .special_defense_iv = mon.base_data.ivs.special * 2 + getRandomness(ev_randomness, 5),
+                        .hp_iv = @as(u5, mon.base_data.ivs.special) * 2 + getRandomness(ev_randomness, 0),
+                        .attack_iv = @as(u5, mon.base_data.ivs.attack) * 2 + getRandomness(ev_randomness, 1),
+                        .defense_iv = @as(u5, mon.base_data.ivs.defense) * 2 + getRandomness(ev_randomness, 2),
+                        .speed_iv = @as(u5, mon.base_data.ivs.speed) * 2 + getRandomness(ev_randomness, 3),
+                        .special_attack_iv = @as(u5, mon.base_data.ivs.special) * 2 + getRandomness(ev_randomness, 4),
+                        .special_defense_iv = @as(u5, mon.base_data.ivs.special) * 2 + getRandomness(ev_randomness, 5),
                         .egg = false,
                         .ability = 0
                     },
@@ -1037,12 +1037,12 @@ pub const Mon = struct {
                       .trainer_is_female = false
                 },
                 .iv_egg_ability = .{
-                    .hp_iv = mon.base_data.ivs.special * 2 + getRandomness(ev_randomness, 0),
-                    .attack_iv = mon.base_data.ivs.attack * 2 + getRandomness(ev_randomness, 1),
-                    .defense_iv = mon.base_data.ivs.defense * 2 + getRandomness(ev_randomness, 2),
-                    .speed_iv = mon.base_data.ivs.speed * 2 + getRandomness(ev_randomness, 3),
-                    .special_attack_iv = mon.base_data.ivs.special * 2 + getRandomness(ev_randomness, 4),
-                    .special_defense_iv = mon.base_data.ivs.special * 2 + getRandomness(ev_randomness, 5),
+                    .hp_iv = @as(u5, mon.base_data.ivs.special) * 2 + getRandomness(ev_randomness, 0),
+                    .attack_iv = @as(u5, mon.base_data.ivs.attack) * 2 + getRandomness(ev_randomness, 1),
+                    .defense_iv = @as(u5, mon.base_data.ivs.defense) * 2 + getRandomness(ev_randomness, 2),
+                    .speed_iv = @as(u5, mon.base_data.ivs.speed) * 2 + getRandomness(ev_randomness, 3),
+                    .special_attack_iv = @as(u5, mon.base_data.ivs.special) * 2 + getRandomness(ev_randomness, 4),
+                    .special_defense_iv = @as(u5, mon.base_data.ivs.special) * 2 + getRandomness(ev_randomness, 5),
                     .egg = false,
                     .ability = 0
                 },

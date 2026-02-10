@@ -140,9 +140,10 @@ pub fn main() !void {
     }
 
     var caught_source = interface.CaughtMonInterface.init(source_version, source_bytes, allocator);
+    var caught_destination: ?interface.CaughtMonInterface = if (destination_bytes_opt != null) interface.CaughtMonInterface.init(destination_version.?, destination_bytes_opt.?, allocator) else null;
     tui.startTui(&caught_source) catch {};
 
-    var caught_destination: ?interface.CaughtMonInterface = if (destination_bytes_opt != null) interface.CaughtMonInterface.init(destination_version.?, destination_bytes_opt.?, allocator) else null;
+
 
     if (mode == .TRANSFER) {
         interface.execute_move(&caught_source, &caught_destination.?);

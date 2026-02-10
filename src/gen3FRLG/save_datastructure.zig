@@ -370,7 +370,7 @@ pub const StrippedMonData = struct {
 
     pub fn fromMon(mon: gen3.Mon) @This() {
         var ot_name: [7]u8 = undefined;
-        std.mem.copyForwards(u8, &ot_name, &encoding.utf8ToGen3(mon.base_data.ot_name));
+        std.mem.copyForwards(u8, &ot_name, encoding.utf8ToGen3(mon.base_data.ot_name)[0..7]);
 
         const misc_block: MiscBlock = .{
             .ability = Ability.fromMon(mon.base_data.iv_egg_ability),
@@ -410,7 +410,7 @@ pub const StrippedMonData = struct {
             .dex_number = mon.base_data.dex_number,
             .experience = mon.base_data.experience,
             .friendship = mon.base_data.friendship,
-            .item_held = mon.base_data.friendship,
+            .item_held = mon.base_data.item_held,
             .padding = 0,
             .pp_bonuses = .{
                 .move1 = mon.base_data.pp_bonuses[0],
@@ -546,7 +546,7 @@ pub const MonData = struct {
     special_attack: u16,
     special_defense: u16,
 
-    fn fromBytes(bytes: [full_mon_size]u8) @This() {
+    pub fn fromBytes(bytes: [full_mon_size]u8) @This() {
         return .{
             .stripped_mon_data = StrippedMonData.fromBytes(bytes[0..80].*),
             .status_condition = @bitCast(bytes[80..84].*),
@@ -562,7 +562,7 @@ pub const MonData = struct {
         };
     }
 
-    fn toBytes(self: *const @This()) [full_mon_size]u8 {
+    pub fn toBytes(self: *const @This()) [full_mon_size]u8 {
         var result: [full_mon_size]u8 = undefined;
         copyForwards(u8, result[0..80], self.stripped_mon_data.toBytes()[0..]);
         const status_condition_bytes: [4]u8 = @bitCast(self.status_condition);
@@ -628,6 +628,11 @@ pub const FullPartyData = struct {
             const start = 4 + (i * full_mon_size);
             const end = start + full_mon_size;
             std.mem.copyForwards(u8, result[start..end], &mon_data_bytes);
+        }
+
+        // All non-used bytes are zeroes, except mail-byte which is 255 (no value)
+        while (i < 6): (i += 1) {
+            result[4 + (i * full_mon_size) + 0x55] = 255;
         }
 
         return result;
