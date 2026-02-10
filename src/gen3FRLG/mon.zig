@@ -581,7 +581,7 @@ pub const Stats = struct {
 };
 
 pub const MonParty = struct {
-    number_of_mon: u8,
+    number_of_mon: u32,
     mons: [6]Mon,
 
     pub fn init(full_party_data: gen3_data.FullPartyData, allocator: std.mem.Allocator) @This() {
@@ -609,7 +609,7 @@ pub const MonParty = struct {
     fn toFullPartyData(self: *const @This()) gen3_data.FullPartyData {
         var result: gen3_data.FullPartyData = undefined;
         result.number_of_mon = self.number_of_mon;
-        var i = 0;
+        var i: usize = 0;
         while (i < self.number_of_mon): (i += 1) {
             result.mons[i] = gen3_data.MonData.fromMon(self.mons[i]);
         }
@@ -644,9 +644,18 @@ pub const MonBox = struct {
         }
     }
 
-    fn toBytes(self: *const @This()) [gen3_data.box_size]u8 {
-        _ = &self;
-        gen3_data.StrippedMonData.fromMon(self.mons[0]);
+    pub fn toFullBoxData(self: *const @This()) gen3_data.FullBoxData {
+        const number_of_mons = self.number_of_mon;
+        var stripped_mons: [gen3_data.mon_per_box]gen3_data.StrippedMonData = undefined;
+        var i: usize = 0;
+        while (i < number_of_mons): ( i += 1) {
+            stripped_mons[i] = gen3_data.StrippedMonData.fromMon(self.mons[i]);
+        }
+        return .{
+            .number_of_mons = number_of_mons,
+            .mons = stripped_mons
+        };
+
     }
 };
 
@@ -700,8 +709,31 @@ pub const CaughtMon = struct {
     }
 
     pub fn toSave(self: *const@This(), bytes: []u8) void {
-        _ = &self; _ = &bytes;
-        _ = gen3_data.StrippedMonData.fromMon(self.party.mons[0]);
+        const full_party_bytes = self.party.toFullPartyData().toBytes();
+        const party_section_start = gen3_data.getSectionStart(bytes, gen3_data.party_section_id);
+        std.mem.copyForwards(u8, bytes[party_section_start + gen3_data.party_offset..], &full_party_bytes);
+
+        var full_box_datas: [number_of_boxes]gen3_data.FullBoxData = undefined;
+        var i: usize = 0;
+        while (i < full_box_datas.len): ( i += 1) {
+            full_box_datas[i] = self.boxes[i].toFullBoxData();
+        }
+
+        const box_bytes = gen3_data.boxesToBoxBytes(self.current_box, full_box_datas, bytes);
+        var j: usize = 5;
+        while (j < gen3_data.last_box_section_id): (j += 1) {
+            const section_start = gen3_data.getSectionStart(bytes, @intCast(j));
+            const source_start= 4 + (i * gen3_data.box_section_size);
+            const source_end = source_start + gen3_data.box_section_size;
+            std.mem.copyForwards(u8, bytes[section_start..], box_bytes[source_start..source_end]);
+        }
+
+        const last_section_start = gen3_data.getSectionStart(bytes, gen3_data.last_box_section_id);
+        const source_start = 8 * gen3_data.box_section_size;
+        const source_end = source_start + gen3_data.last_box_section_size;
+        std.mem.copyForwards(u8, bytes[last_section_start..], box_bytes[source_start..source_end]);
+
+        gen3_data.fixChecksums(bytes);
     }
 
     pub fn getVersion(self: *const@This()) versions.Version {

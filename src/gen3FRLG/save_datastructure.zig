@@ -5,6 +5,7 @@ const encoding = @import("encoding.zig");
 
 const copyForwards = std.mem.copyForwards;
 const asBytes = std.mem.asBytes;
+const writeInt = std.mem.writeInt;
 
 pub const save_size = 1 << 17;
 
@@ -362,6 +363,11 @@ pub const StrippedMonData = struct {
         };
     }
 
+    fn unpackMove(move :?*const moves_ns.Move) u16 {
+        if (move == null) return 0;
+        return move.?.id;
+    }
+
     pub fn fromMon(mon: gen3.Mon) @This() {
         var ot_name: [7]u8 = undefined;
         std.mem.copyForwards(u8, &ot_name, &encoding.utf8ToGen3(mon.base_data.ot_name));
@@ -375,10 +381,10 @@ pub const StrippedMonData = struct {
         };
 
         const attack_block: AttackBlock = .{
-            .move1 = mon.base_data.moves[0].?.id,
-            .move2 = mon.base_data.moves[1].?.id,
-            .move3 = mon.base_data.moves[2].?.id,
-            .move4 = mon.base_data.moves[3].?.id,
+            .move1 = unpackMove(mon.base_data.moves[0]),
+            .move2 = unpackMove(mon.base_data.moves[1]),
+            .move3 = unpackMove(mon.base_data.moves[2]),
+            .move4 = unpackMove(mon.base_data.moves[3]),
             .pp1 = mon.base_data.pps[0],
             .pp2 = mon.base_data.pps[1],
             .pp3 = mon.base_data.pps[2],
@@ -490,15 +496,15 @@ pub const StrippedMonData = struct {
 
     fn toBytes(self: *const @This()) [stripped_mon_size]u8 {
         var result: [stripped_mon_size]u8 = undefined;
-        copyForwards(u8, result[0..4], &asBytes(self.personality_value));
-        copyForwards(u8, result[4..8], asBytes(self.ot_id));
+        std.mem.writeInt(u32, result[0..4], self.personality_value, .little);
+        std.mem.writeInt(u32, result[4..8], self.ot_id, .little);
         copyForwards(u8, result[8..18], &self.nickname);
         result[18] = self.language;
         result[19] = @bitCast(self.misc_flags);
         copyForwards(u8, result[20..27], &self.ot_name);
         result[27] = self.markings;
-        copyForwards(u8, result[28..30], &asBytes(self.checksum));
-        copyForwards(u8, result[30..32], &asBytes(self.unknown0));
+        std.mem.writeInt(u16, result[28..30], self.checksum, .little);
+        std.mem.writeInt(u16, result[30..32], self.unknown0, .little);
         copyForwards(u8, result[32..80], &self.data);
         return result;
     }
@@ -522,7 +528,7 @@ pub const StatusCondition = packed struct {
             .freeze = false,
             .paralysis = false,
             .bad_poison = false,
-            .padding= 0
+            .padding0= 0
         };
     }
 };
@@ -559,16 +565,17 @@ pub const MonData = struct {
     fn toBytes(self: *const @This()) [full_mon_size]u8 {
         var result: [full_mon_size]u8 = undefined;
         copyForwards(u8, result[0..80], self.stripped_mon_data.toBytes()[0..]);
-        copyForwards(u8, result[80..84], asBytes(self.status_condition));
+        const status_condition_bytes: [4]u8 = @bitCast(self.status_condition);
+        copyForwards(u8, result[80..84], &status_condition_bytes);
         result[84] = self.level;
         result[85] = self.mail_id;
-        copyForwards(u8, result[86..88], &asBytes(self.current_hp));
-        copyForwards(u8, result[88..90], &asBytes(self.total_hp));
-        copyForwards(u8, result[90..92], &asBytes(self.attack));
-        copyForwards(u8, result[92..94], &asBytes(self.defense));
-        copyForwards(u8, result[94..96], &asBytes(self.speed));
-        copyForwards(u8, result[96..98], &asBytes(self.special_attack));
-        copyForwards(u8, result[98..100], &.asBytes(self.special_defense));
+        writeU16(result[86..88],self.current_hp);
+        writeU16(result[88..90],self.total_hp);
+        writeU16(result[90..92],self.attack);
+        writeU16(result[92..94],self.defense);
+        writeU16(result[94..96],self.speed);
+        writeU16(result[96..98],self.special_attack);
+        writeU16(result[98..100],self.special_defense);
         return result;
     }
 
@@ -590,8 +597,12 @@ pub const MonData = struct {
 
 };
 
+fn writeU16(buffer: *[2]u8, value: u16) void {
+    writeInt(u16, buffer, value, .little);
+}
+
 pub const FullPartyData = struct {
-    number_of_mon: u8,
+    number_of_mon: u32,
     mons: [6]MonData,
 
     pub fn init(bytes: []const u8) @This() {
@@ -608,7 +619,18 @@ pub const FullPartyData = struct {
     }
 
     pub fn toBytes(self: *const @This()) [party_mon_details_size]u8 {
-        _ = self;
+        var result: [party_mon_details_size]u8 = .{0} ** party_mon_details_size;
+        const number_of_mon_bytes: [4]u8 = @bitCast(self.number_of_mon);
+        std.mem.copyForwards(u8, result[0..], &number_of_mon_bytes);
+        var i: usize = 0;
+        while (i < self.number_of_mon): (i += 1) {
+            const mon_data_bytes: [full_mon_size]u8 = self.mons[i].toBytes();
+            const start = 4 + (i * full_mon_size);
+            const end = start + full_mon_size;
+            std.mem.copyForwards(u8, result[start..end], &mon_data_bytes);
+        }
+
+        return result;
     }
 };
 
@@ -658,6 +680,47 @@ pub fn getBoxBytes(bytes: []const u8) [boxes_total_size]u8 {
     return result;
 }
 
+pub fn boxesToBoxBytes(current_box: u32, boxes: [number_of_boxes]FullBoxData, old_state: []const u8) [boxes_total_size]u8 {
+    var result: [boxes_total_size]u8 = getBoxBytes(old_state);
+    writeInt(u32, result[0..4], current_box, .little);
+    var i: usize = 0;
+    while (i < number_of_boxes): ( i += 1) {
+        const box_bytes = boxes[i].toBytes();
+        const start = 4 + (i * box_bytes.len);
+        const end = start + box_bytes.len;
+        std.mem.copyForwards(u8, result[start..end], &box_bytes);
+    }
+
+    return result;
+}
+
+fn getSectionSize(section_id: u8) u16 {
+    if (section_id == 0) return 3884;
+    if (section_id == 13) return 2000;
+    return 3968;
+}
+
+pub fn fixChecksumForSection(section_id: u8, bytes: []u8) void {
+    const curr_section_size = getSectionSize(section_id);
+    const section_start = getSectionStart(bytes, section_id);
+    const section_bytes: []u8 = bytes[section_start .. section_start + curr_section_size];
+    const section_u32: []align(1) u32 = @ptrCast(section_bytes);
+    var checksum32: u32 = 0;
+    for (section_u32) |dword| {
+        checksum32 +%= dword;
+    }
+    const checksum: u16 = @as(u16, @truncate(checksum32)) +% @as(u16, @intCast(checksum32 >> 16));
+    const checksum_bytes: [2]u8 = @bitCast(checksum);
+    std.mem.copyForwards(u8, bytes[section_start + checksum_offset..section_start + checksum_offset + 2], &checksum_bytes);
+}
+
+pub fn fixChecksums(bytes: []u8) void {
+    var i: usize = 0;
+    while (i <= 13): (i += 1) {
+        fixChecksumForSection(@intCast(i), bytes);
+    }
+}
+
 pub const FullBoxData = struct {
     number_of_mons: u8,
     mons: [mon_per_box]StrippedMonData,
@@ -688,6 +751,18 @@ pub const FullBoxData = struct {
             .number_of_mons = number_of_mon,
             .mons = mons
         };
+    }
+
+    pub fn toBytes(self: *const @This()) [box_size]u8 {
+        var result: [box_size]u8 = .{0} ** box_size;
+        var i: usize = 0;
+        while (i < self.number_of_mons): (i += 1) {
+            const start = i * stripped_mon_size;
+            const end = start + stripped_mon_size;
+            const stripped_mon_bytes: [stripped_mon_size]u8 = self.mons[i].toBytes();
+            std.mem.copyForwards(u8, result[start..end], &stripped_mon_bytes);
+        }
+        return result;
     }
 };
 

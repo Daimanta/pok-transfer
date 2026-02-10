@@ -87,7 +87,7 @@ pub const CaughtMonInterface = union(enum) {
         return switch (self.*) {
             .gen1 => |x| x.party.number_of_mon,
             .gen2gs => |x| x.party.number_of_mon,
-            .gen3frlg => |x| x.party.number_of_mon
+            .gen3frlg => |x| @intCast(x.party.number_of_mon)
         };
     }
 
