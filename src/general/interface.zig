@@ -311,6 +311,10 @@ pub fn execute_move(source: *CaughtMonInterface, destination: *CaughtMonInterfac
     }
 }
 
-
+pub const Gender = enum {
+    MALE,
+    FEMALE,
+    UNKNOWN
+};
 
 

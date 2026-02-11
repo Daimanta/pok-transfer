@@ -229,12 +229,6 @@ pub const MonSpecies = extern struct {
     padding: u16
 };
 
-pub const Gender = enum {
-    MALE,
-    FEMALE,
-    UNKNOWN
-};
-
 pub const MonBaseData = struct {
     personality_value: u32,
     ot_id: u32,
@@ -324,7 +318,7 @@ pub const MonBaseData = struct {
         return 1.0;
     }
 
-    fn getGender(self: *const @This()) Gender {
+    fn getGender(self: *const @This()) interface.Gender {
         const species = self.getSpecies();
         const limit_value = species.gender;
         if (limit_value == 0) return .MALE;
@@ -768,13 +762,14 @@ pub const CaughtMon = struct {
             return error.NationalDexNotUnlocked;
         }
 
-        while(i < 12): (i += 1) {
-            if (self.boxes[i].number_of_mon < 20) {
+        while(i < number_of_boxes): (i += 1) {
+            if (self.boxes[i].number_of_mon < gen3_data.mon_per_box) {
                 self.boxes[i].mons[self.boxes[i].number_of_mon] = mon_insert;
                 self.boxes[i].number_of_mon += 1;
                 return;
             }
         }
+        return error.OutOfSpace;
     }
 
     pub fn getFreeSpace(self: *const@This()) u16 {
@@ -943,15 +938,16 @@ pub const Mon = struct {
 
     fn fromGen1(mon: @import("../gen1/mon.zig").Mon) @This() {
         const ot_id_bytes = std.mem.asBytes(&mon.base_data.ot_number);
+        const ot_id = enrich_ot_id(mon.base_data.ot_number);
         const randomness = std.crypto.hash.Md5.hashResult(&[_]u8{mon.base_data.ivs.special, mon.base_data.ivs.attack, mon.base_data.ivs.defense, mon.base_data.ivs.speed, ot_id_bytes[0], ot_id_bytes[1]});
-        const personality_value: u32 = @bitCast(randomness[0..4].*);
+        const personality_value: u32 = determine_personality_value(ot_id, mon.base_data.dex_number, mon.isShiny(), mon.getGender(), randomness);
         const ev_randomness = randomness[4];
 
 
         return Mon{
               .base_data = .{
                     .personality_value = personality_value,
-                    .ot_id = enrich_ot_id(mon.base_data.ot_number),
+                    .ot_id = ot_id,
                     .nickname = mon.base_data.name,
                     .language = .ENGLISH,
                     .misc_flags = MiscFlags.regular_mon(),
@@ -1005,14 +1001,15 @@ pub const Mon = struct {
 
     fn fromGen2(mon: @import("../gen2GS/mon.zig").Mon) @This() {
         const ot_id_bytes = std.mem.asBytes(&mon.base_data.ot_number);
+        const ot_id = enrich_ot_id(mon.base_data.ot_number);
         const randomness = std.crypto.hash.Md5.hashResult(&[_]u8{mon.base_data.ivs.special, mon.base_data.ivs.attack, mon.base_data.ivs.defense, mon.base_data.ivs.speed, ot_id_bytes[0], ot_id_bytes[1]});
-        const personality_value: u32 = @bitCast(randomness[0..4].*);
+        const personality_value: u32 = determine_personality_value(ot_id, mon.base_data.dex_number, mon.isShiny(), mon.getGender(), randomness);
         const ev_randomness = randomness[4];
 
         return Mon{
             .base_data = .{
                 .personality_value = personality_value,
-                .ot_id = enrich_ot_id(mon.base_data.ot_number),
+                .ot_id = ot_id,
                 .nickname = mon.base_data.name,
                 .language = .ENGLISH,
                 .misc_flags = MiscFlags.regular_mon(),
@@ -1135,6 +1132,65 @@ pub const Mon = struct {
             return "";
         }
     }
+
+    pub fn generate(dex_number: u16, gender: interface.Gender, shiny: bool, ot_id: u32, attack_iv: u5, defense_iv: u5, speed_iv: u5, hp_iv: u5, special_attack_iv: u5, special_defense_iv: u5) @This() {
+        var prng = std.Random.DefaultPrng.init(@as(u64, @truncate(@abs(std.time.nanoTimestamp()))));
+        var random: [16]u8 = undefined;
+        prng.fill(random[0..]);
+
+        const personality_value: u32 = determine_personality_value(ot_id, dex_number, shiny, gender, random);
+        const base_data: MonBaseData = .{
+            .personality_value = personality_value,
+            .ot_id = ot_id,
+            .nickname = "JOHN",
+            .language = .ENGLISH,
+            .misc_flags = MiscFlags.regular_mon(),
+            .ot_name ="BILL",
+            .markings = 0,
+            .checksum = 0, // should be fixed during conversion
+                .unknown0 = 0,
+            .dex_number = dex_number,
+            .item_held = 0,
+            .experience = 30,
+            .pp_bonuses = .{0, 0, 0, 0},
+            .friendship = 70,
+            .moves = .{&moves_ns.moves[149], null, null, null},
+            .pps = .{0, 0, 0, 0},
+            .ev = .{
+                .attack = 0,
+                .defense = 0,
+                .hp = 0,
+                .speed = 0,
+                .special_attack = 0,
+                .special_defense = 0
+            },
+            .contest_stats = ContestStats.no_stats(),
+            .pokerus = 0,
+            .met_location = 254, //in-game trade
+                .origins_info = .{
+                .level_met = @intCast(2),
+                .origin_game = 4, // Fire Red
+                      .pokeball_type = 4, // standard ball
+                      .trainer_is_female = false
+            },
+            .iv_egg_ability = .{
+                .hp_iv = hp_iv,
+                .attack_iv = attack_iv,
+                .defense_iv = defense_iv,
+                .speed_iv = speed_iv,
+                .special_attack_iv = special_attack_iv,
+                .special_defense_iv = special_defense_iv,
+                .egg = false,
+                .ability = 0
+            },
+            .ribbons_obedience = Ribbons.no_ribbons(),
+        };
+        const stats = Stats.fromMonBaseData(base_data);
+        return .{
+            .base_data = base_data,
+            .stats = stats
+        };
+    }
 };
 
 pub fn enrich_ot_id(old_ot_id: u16) u32 {
@@ -1146,4 +1202,38 @@ pub fn enrich_ot_id(old_ot_id: u16) u32 {
 
 fn getRandomness(randomness_byte: u8, bit: u3) u1 {
     return @intCast((randomness_byte >> bit) & 1);
+}
+
+fn determine_personality_value(ot_id: u32, dex_number: u16, shiny: bool, gender: interface.Gender, randomness: [16]u8) u32{
+    const shiny_calc = @as(u16, @intCast(ot_id >> 16)) ^ @as(u16, @truncate(ot_id));
+    var gender_byte: u8 = undefined;
+    const second_byte: u8 = randomness[1];
+
+    if (gender != .UNKNOWN) {
+        const species = gen3_species_data[dex_number - 1];
+        const limit_value = species.gender;
+        if (limit_value == 0 or limit_value == 254) {
+            gender_byte = randomness[0];
+        } else {
+            if (gender == .MALE) {
+                gender_byte = limit_value + @mod(randomness[0], (255 - limit_value));
+            } else {
+                gender_byte =  limit_value - 1 - @mod(randomness[0], limit_value - 1);
+            }
+        }
+    } else {
+        gender_byte = randomness[0];
+    }
+
+    const lower_half = @as(u16, gender_byte) + (@as(u16, second_byte) << 8);
+    var upper_half = shiny_calc ^ lower_half; // Not modifying this guarantees a zero remainder shiny (S = 0)
+    const upper_half_randomness: u16 = @bitCast([2]u8{randomness[2], randomness[3]});
+
+    if (shiny) {
+        upper_half = upper_half ^ @mod(upper_half_randomness, 8); // only change last 3 bits, guarantees shinyness
+    } else {
+        upper_half = upper_half ^ (8 + @mod(upper_half_randomness, 65535 - 8));
+    }
+    const result = (@as(u32, upper_half) << 16) + lower_half;
+    return result;
 }

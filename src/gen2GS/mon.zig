@@ -154,13 +154,6 @@ pub const MonPP = struct {
     }
 };
 
-pub const Gender = enum {
-    MALE,
-    FEMALE,
-    UNKNOWN
-};
-
-
 pub const SpeciesType = enum(u8) {
     NORMAL = 0,
     FIGHTING = 1,
@@ -278,7 +271,7 @@ pub const Mon = struct {
         };
     }
 
-    pub fn getGender(self: @This()) Gender {
+    pub fn getGender(self: @This()) interface.Gender {
         const species = gen2_species_data[self.base_data.dex_number - 1];
         const gender_ratio = species.gender_ratio;
         const attack = self.base_data.ivs.attack;
@@ -302,10 +295,10 @@ pub const Mon = struct {
     }
 
     pub fn isShiny(self: @This()) bool {
-        if (self.base_data.ivs.defense != 10 or self.base_data.ivs.speed != 10 or self.base_data.ivs.special) {
+        if (self.base_data.ivs.defense != 10 or self.base_data.ivs.speed != 10 or self.base_data.ivs.special != 10) {
             return false;
         }
-        const matches: []u8 = .{2, 3, 6, 7, 10, 11, 14, 15};
+        const matches: []const u8 = &[_]u8{2, 3, 6, 7, 10, 11, 14, 15};
         for (matches) |match| {
             if (self.base_data.ivs.attack == match) {
                 return true;
@@ -382,7 +375,7 @@ pub const Mon = struct {
             .level = mon.stats.level,
             .held_item = 0,
             .moves = mon.base_data.moves,
-            .ot_number = @intCast(mon.base_data.ot_id >> 16),
+            .ot_number = @truncate(mon.base_data.ot_id),
             .ot_name = mon.base_data.ot_name,
             .experience_points = @intCast(mon.base_data.experience),
             .evs = EV.fromGen3(mon.base_data.ev),
@@ -403,8 +396,9 @@ pub const Mon = struct {
         const type_name = @import("../general/names.zig").mon_names[self.base_data.dex_number - 1];
         const condition:[]const u8 = self.stats.statuses.toString();
         const species = gen2_species_data[self.base_data.dex_number - 1];
+        const shiny_string = if (self.isShiny()) "*" else "";
 
-        pok_transfer.bufferedPrint("{s}, lvl. {d} {s} {s}", .{self.base_data.name, self.base_data.level, type_name, self.getGenderSymbol()});
+        pok_transfer.bufferedPrint("{s}, lvl. {d} {s} {s} {s}", .{self.base_data.name, self.base_data.level, type_name, self.getGenderSymbol(), shiny_string});
         if (species.type1 != species.type2) {
             pok_transfer.bufferedPrint("({s}/{s})", .{@tagName(speciesTypeFromNumber(species.type1)), @tagName(speciesTypeFromNumber(species.type2))});
         } else {
@@ -799,7 +793,7 @@ pub const CaughtMon = struct {
     pub fn insertMon(self: *@This(), mon: interface.MonInterface) !void{
         var i: usize = 0;
         const mon_insert = try Mon.fromMonInterface(mon);
-        while(i < 12): (i += 1) {
+        while(i < number_of_boxes): (i += 1) {
             if (self.boxes[i].number_of_mon < 20) {
                 self.boxes[i].mons[self.boxes[i].number_of_mon] = mon_insert;
                 self.boxes[i].number_of_mon += 1;

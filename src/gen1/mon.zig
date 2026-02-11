@@ -241,8 +241,9 @@ pub const Mon = struct {
         } else if (self.base_data.statuses.paralyzed) {
             condition = "PARALYZED";
         }
+        const shiny_string = if (self.isShiny()) "*" else "";
 
-        pok_transfer.bufferedPrint("{s}, lvl. {d} {s} ", .{self.base_data.name, self.base_data.level, type_name});
+        pok_transfer.bufferedPrint("{s}, lvl. {d} {s} {s} {s}", .{self.base_data.name, self.base_data.level, type_name, self.getGenderSymbol(), shiny_string});
         if (self.base_data.type1 != self.base_data.type2) {
             pok_transfer.bufferedPrint("({s}/{s})", .{@tagName(typeFromGen1Mon(self.base_data.type1)), @tagName(typeFromGen1Mon(self.base_data.type2))});
         } else {
@@ -317,7 +318,7 @@ pub const Mon = struct {
     }
 
     // Not actually used in Gen 1 but it does indicate the gender in later generations
-    pub fn getGender(self: @This()) Gender {
+    pub fn getGender(self: @This()) interface.Gender {
         const species = gen2.gen2_species_data[self.base_data.dex_number - 1];
         const gender_ratio = species.gender_ratio;
         const attack = self.base_data.ivs.attack;
@@ -342,10 +343,10 @@ pub const Mon = struct {
 
     // Shinyness is shared with Gen 2
     pub fn isShiny(self: @This()) bool {
-        if (self.base_data.ivs.defense != 10 or self.base_data.ivs.speed != 10 or self.base_data.ivs.special) {
+        if (self.base_data.ivs.defense != 10 or self.base_data.ivs.speed != 10 or self.base_data.ivs.special != 10) {
             return false;
         }
-        const matches: []u8 = .{2, 3, 6, 7, 10, 11, 14, 15};
+        const matches: []const u8 = &[_]u8{2, 3, 6, 7, 10, 11, 14, 15};
         for (matches) |match| {
             if (self.base_data.ivs.attack == match) {
                 return true;
@@ -353,12 +354,17 @@ pub const Mon = struct {
         }
         return false;
     }
-};
 
-pub const Gender = enum {
-    MALE,
-    FEMALE,
-    UNKNOWN
+    fn getGenderSymbol(self: *const @This()) []const u8{
+        const gender = self.getGender();
+        if (gender == .MALE) {
+            return "♂";
+        } else if (gender == .FEMALE) {
+            return "♀";
+        } else {
+            return "";
+        }
+    }
 };
 
 pub const MonSpecies = extern struct {
@@ -587,7 +593,7 @@ pub const CaughtMon = struct {
             .type2 = species_reference.type2,
             .held_item = 0,
             .moves = gen3_mon.base_data.moves,
-            .ot_number = @intCast(gen3_mon.base_data.ot_id >> 16),
+            .ot_number = @truncate(gen3_mon.base_data.ot_id),
             .ot_name = gen3_mon.base_data.ot_name,
             .experience_points = @truncate(gen3_mon.base_data.experience),
             .evs = EV.fromGen3(gen3_mon.base_data.ev),
