@@ -42,6 +42,18 @@ pub const total_box_mon = number_of_boxes * mon_per_box;
 
 pub const box_size = stripped_mon_size * mon_per_box;
 
+pub const dex_byte_size = 49;
+pub const owned_section_id = 0;
+pub const owned_offset = 0x0028;
+
+pub const seen_a_section_id = 0;
+pub const seen_b_section_id = 1;
+pub const seen_c_section_id = 4;
+
+pub const seen_a_offset = 0x005C;
+pub const seen_b_offset = 0x05F8;
+pub const seen_c_offset = 0x0B98;
+
 pub const orderings: [24][]const u8 = .{
     "GAEM",
     "GAME",
@@ -771,3 +783,67 @@ pub const FullBoxData = struct {
     }
 };
 
+pub fn getOwned(bytes: []const u8) [dex_byte_size]u8 {
+    const section_start = getSectionStart(bytes, owned_section_id);
+    return bytes[section_start + owned_offset..section_start + owned_offset + dex_byte_size][0..dex_byte_size].*;
+}
+
+pub fn getSeen(bytes: []const u8) [dex_byte_size]u8{
+    const section_start = getSectionStart(bytes, seen_a_section_id);
+    return bytes[section_start + seen_a_offset..section_start + seen_a_offset + dex_byte_size][0..dex_byte_size].*;
+}
+
+pub fn writeCaughtToDex(seen: *[dex_byte_size]u8, owned: *[dex_byte_size]u8, bytes: []u8) void {
+    writeOwned(owned, bytes);
+    writeSeenA(seen, bytes);
+    writeSeenB(seen, bytes);
+    writeSeenC(seen, bytes);
+}
+
+fn writeOwned(owned: *const [dex_byte_size]u8, bytes: []u8) void {
+    const section_start = getSectionStart(bytes, owned_section_id);
+    copyForwards(u8, bytes[section_start + owned_offset..section_start + owned_offset + dex_byte_size], owned);
+}
+
+fn writeSeenA(seen: *const [dex_byte_size]u8, bytes: []u8) void {
+    const section_start = getSectionStart(bytes, seen_a_section_id);
+    copyForwards(u8, bytes[section_start + seen_a_offset..section_start + seen_a_offset + dex_byte_size], seen);
+}
+
+fn writeSeenB(seen: *const [dex_byte_size]u8, bytes: []u8) void {
+    const section_start = getSectionStart(bytes, seen_b_section_id);
+    copyForwards(u8, bytes[section_start + seen_b_offset..section_start + seen_b_offset + dex_byte_size], seen);
+}
+
+fn writeSeenC(seen: *const [dex_byte_size]u8, bytes: []u8) void {
+    const section_start = getSectionStart(bytes, seen_c_section_id);
+    copyForwards(u8, bytes[section_start + seen_c_offset..section_start + seen_c_offset + dex_byte_size], seen);
+}
+
+fn markMonAsSeenAndCaught(seen: *[dex_byte_size]u8, owned: *[dex_byte_size]u8, dex_number: u16) void {
+    const index_number = dex_number - 1;
+    const byte = index_number / 8;
+    const bit: u3 = @intCast(@mod(index_number, 8));
+    seen[byte] = seen[byte] | (@as(u8, 1) << bit);
+    owned[byte] = owned[byte] | (@as(u8, 1) << bit);
+}
+
+// Sets all present mon to seen and caught
+pub fn processDexToSave(caught: *const gen3.CaughtMon, bytes: []u8) void {
+    var owned = getOwned(bytes);
+    var seen = getSeen(bytes);
+    var i: usize = 0;
+    while (i < caught.party.number_of_mon): (i += 1) {
+        markMonAsSeenAndCaught(&seen, &owned, caught.party.mons[i].base_data.dex_number);
+    }
+
+    var j: usize = 0;
+    while (j < number_of_boxes): (j += 1) {
+        var k: usize = 0;
+        while (k < caught.boxes[j].number_of_mon): (k += 1) {
+            markMonAsSeenAndCaught(&seen, &owned, caught.boxes[j].mons[k].base_data.dex_number);
+        }
+    }
+
+    writeCaughtToDex(&seen, &owned, bytes);
+}

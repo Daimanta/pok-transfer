@@ -727,6 +727,8 @@ pub const CaughtMon = struct {
         const source_end = source_start + gen3_data.last_box_section_size;
         std.mem.copyForwards(u8, bytes[last_section_start..], box_bytes[source_start..source_end]);
 
+        gen3_data.processDexToSave(self, bytes);
+
         gen3_data.fixChecksums(bytes);
     }
 
