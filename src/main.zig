@@ -13,7 +13,7 @@ const defaults = @import("defaults.zig");
 const Allocator = std.mem.Allocator;
 const Reader = std.fs.File.Reader;
 
-const exit = std.posix.exit;
+const exit = std.process.exit;
 
 const Mode = enum {
     READ,
@@ -47,17 +47,12 @@ fn getSourceFileLocation(mode: Mode, reader: *std.Io.Reader) []const u8 {
     return source_file_location;
 }
 
-fn getSourceBytes(source_file_location: []const u8, allocator: Allocator) []u8 {
-    var source_file = std.fs.cwd().openFile(source_file_location, .{}) catch {
+fn getSourceBytes(source_file_location: []const u8, allocator: Allocator, io: std.Io) []u8 {
+    const input_bytes = std.Io.Dir.cwd().readFileAlloc(io, source_file_location, allocator, .unlimited) catch {
         std.debug.print("Error", .{});
         exit(1);
     };
 
-    const input_bytes = source_file.readToEndAlloc(allocator, 1 << 20) catch {
-        std.debug.print("Error", .{});
-        exit(1);
-    };
-    source_file.close();
     return input_bytes;
 }
 
@@ -72,48 +67,43 @@ fn getDestinationFileLocation(mode: Mode, reader: *std.Io.Reader) ?[]const u8 {
     return destination_file_location;
 }
 
-fn getDestinationBytes(destination_file_location:?[]const u8, allocator: Allocator) ?[]u8 {
+fn getDestinationBytes(destination_file_location:?[]const u8, allocator: Allocator, io: std.Io) ?[]u8 {
     if (destination_file_location == null) return null;
-    var destination_file = std.fs.cwd().openFile(destination_file_location.?, .{}) catch {
+    const input_bytes = std.Io.Dir.cwd().readFileAlloc(io, destination_file_location.?, allocator, .unlimited) catch {
         std.debug.print("Error", .{});
         exit(1);
     };
 
-    const input_bytes = destination_file.readToEndAlloc(allocator, 1 << 20) catch {
-        std.debug.print("Error", .{});
-        exit(1);
-    };
-    destination_file.close();
     return input_bytes;
 
 }
 
-fn replaceBytesInFile(location: []const u8, bytes: []const u8) void {
+fn replaceBytesInFile(location: []const u8, bytes: []const u8, io: std.Io) void {
     // Wipes file and writes replaced bytes
-        _ = std.fs.cwd().createFile(location, .{.truncate = true}) catch {};
-    var file = std.fs.cwd().openFile(location, .{.mode = .write_only}) catch {
+    _ = std.Io.Dir.cwd().createFile(io, location, .{.truncate = true}) catch {};
+    var file = std.Io.Dir.cwd().openFile(io, location, .{.mode = .write_only}) catch {
         std.debug.print("Could not open file", .{});
         exit(1);
     };
-    file.writeAll(bytes) catch {
+    file.writePositionalAll(io, bytes, 0) catch {
         std.debug.print("Could not write to file", .{});
         exit(1);
     };
 }
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
     var gpa = std.heap.DebugAllocator(.{}){};
     const allocator = gpa.allocator();
 
     var stdin_buffer: [512]u8 = undefined;
-    var reader_p = std.fs.File.stdin().reader(&stdin_buffer);
+    var reader_p = std.Io.File.stdin().reader(init.io, &stdin_buffer);
     const reader = &reader_p.interface;
 
     const mode = getMode(reader);
     const source_file_location = getSourceFileLocation(mode, reader);
-    const source_bytes = getSourceBytes(source_file_location, allocator);
+    const source_bytes = getSourceBytes(source_file_location, allocator, init.io);
     const destination_file_location = getDestinationFileLocation(mode, reader);
-    const destination_bytes_opt = getDestinationBytes(destination_file_location, allocator);
+    const destination_bytes_opt = getDestinationBytes(destination_file_location, allocator, init.io);
 
     const source_version = versions.determineVersion(source_bytes) catch {
         pok_transfer.bufferedPrint("Source file does not match any version known or checksum is corrupted. Exiting.\n", .{});
@@ -141,7 +131,7 @@ pub fn main() !void {
 
     var caught_source = interface.CaughtMonInterface.init(source_version, source_bytes, allocator);
     var caught_destination: ?interface.CaughtMonInterface = if (destination_bytes_opt != null) interface.CaughtMonInterface.init(destination_version.?, destination_bytes_opt.?, allocator) else null;
-    tui.startTui(&caught_source) catch {};
+    tui.startTui(&caught_source, init.io) catch {};
 
 
 
@@ -149,8 +139,8 @@ pub fn main() !void {
         interface.execute_move(&caught_source, &caught_destination.?);
         caught_source.toSave(source_bytes[0..caught_source.getSaveSize()]);
         caught_destination.?.toSave(destination_bytes_opt.?[0..caught_destination.?.getSaveSize()]);
-        replaceBytesInFile(source_file_location, source_bytes);
-        replaceBytesInFile(destination_file_location.?, destination_bytes_opt.?);
+        replaceBytesInFile(source_file_location, source_bytes, init.io);
+        replaceBytesInFile(destination_file_location.?, destination_bytes_opt.?, init.io);
     }
 
 }

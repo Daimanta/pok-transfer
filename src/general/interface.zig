@@ -219,14 +219,14 @@ pub const MoveMon = struct {
     box_mon: [][]bool,
 
     pub fn init(party_size: u8, box_size: u8, box_count: u8, allocator: std.mem.Allocator) @This() {
-        var box_mon = allocator.alloc([]bool, box_count) catch {std.posix.exit(1);};
+        var box_mon = allocator.alloc([]bool, box_count) catch {std.process.exit(1);};
         var i: usize = 0;
         while (i < box_mon.len): (i += 1) {
-            box_mon[i] = allocator.alloc(bool, box_size) catch {std.posix.exit(1);};
+            box_mon[i] = allocator.alloc(bool, box_size) catch {std.process.exit(1);};
         }
 
         return .{
-            .party_mon = allocator.alloc(bool, party_size) catch {std.posix.exit(1);},
+            .party_mon = allocator.alloc(bool, party_size) catch {std.process.exit(1);},
             .box_mon = box_mon
         };
     }

@@ -184,7 +184,7 @@ pub const State = struct {
     }
 };
 
-pub fn startTui(caught: *interface.CaughtMonInterface) !void {
+pub fn startTui(caught: *interface.CaughtMonInterface, io: std.Io) !void {
     var state: State = .{
         .mode = .GENERAL,
         .box = 0,
@@ -192,7 +192,7 @@ pub fn startTui(caught: *interface.CaughtMonInterface) !void {
     };
 
     var stdin_buffer: [512]u8 = undefined;
-    var reader_p = std.fs.File.stdin().reader(&stdin_buffer);
+    var reader_p = std.Io.File.stdin().reader(io, &stdin_buffer);
     var reader = &reader_p.interface;
     while (true) {
         if (state.mode == .EXIT) {
