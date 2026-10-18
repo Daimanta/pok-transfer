@@ -35,7 +35,7 @@ pub fn gen3toUtf8(input: []const u8, allocator: std.mem.Allocator) ![]u8 {
 }
 
 pub fn utf8ToGen3(input: []const u8) [10]u8 {
-    var result: [10]u8 = .{terminator} ** 10;
+    var result: [10]u8 = @splat(terminator);
     var result_idx: usize = 0;
     const utf8_view = std.unicode.Utf8View.init(input) catch {unreachable;};
     var iterator = std.unicode.Utf8View.iterator(utf8_view);

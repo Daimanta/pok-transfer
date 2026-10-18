@@ -478,8 +478,8 @@ pub const MonParty = struct {
 
         while (i < party_size): (i += 1) {
             species[i] = 255;
-            ot_names[i] = .{80} ** 11;
-            mon_names[i] = .{80} ** 11;
+            ot_names[i] = @splat(80);
+            mon_names[i] = @splat(80);
         }
 
         return gen2data.FullPartyData{
@@ -560,8 +560,8 @@ pub const MonBox = struct {
         }
         while (i < box_size): (i += 1) {
             species[i] = 255;
-            ot_names[i] = .{80} ** 11;
-            mon_names[i] = .{80} ** 11;
+            ot_names[i] = @splat(80);
+            mon_names[i] = @splat(80);
         }
 
         return .{

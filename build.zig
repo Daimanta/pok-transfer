@@ -8,8 +8,8 @@ const std = @import("std");
 // know when a step doesn't need to be re-run).
 pub fn build(b: *std.Build) void {
     const current_zig_version = @import("builtin").zig_version;
-    if (current_zig_version.major != 0 or current_zig_version.minor < 16) {
-        std.debug.print("This project does not compile with a Zig version <0.16.x. Exiting.", .{});
+    if (current_zig_version.major != 0 or current_zig_version.minor < 17) {
+        std.debug.print("This project does not compile with a Zig version <0.17.x. Exiting.", .{});
         std.process.exit(1);
     }
 
@@ -42,10 +42,6 @@ pub fn build(b: *std.Build) void {
 
     run_cmd.step.dependOn(b.getInstallStep());
 
-
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
-    }
 
     const mod_tests = b.addTest(.{
         .root_module = mod,

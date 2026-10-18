@@ -401,8 +401,8 @@ pub const MoveMon = struct {
 
     pub fn init() @This() {
         return .{
-            .party_mon = .{false} ** 6,
-            .box_mon = .{.{ false } ** box_size} ** number_of_boxes
+            .party_mon = @splat(false),
+            .box_mon = @splat(.{@splat(false)})
         };
     }
 
@@ -726,7 +726,7 @@ pub const MonBox = struct {
         }
 
         while (i < 20): (i += 1) {
-            result[i] = .{80} ** 11;
+            result[i] = @splat(80);
         }
 
         return result;
@@ -741,7 +741,7 @@ pub const MonBox = struct {
         }
 
         while (i < 20): (i += 1) {
-            result[i] = .{80} ** 11;
+            result[i] = @splat(80);
         }
 
         return result;
@@ -816,11 +816,11 @@ pub const MonParty = struct {
         }
         i = 0;
         while (i < 6): (i += 1) {
-            ot_names[i] = if (self.number_of_mon >= i + 1) encoding.utf8ToGenI(self.mons[i].base_data.ot_name) else .{80} ** 11;
+            ot_names[i] = if (self.number_of_mon >= i + 1) encoding.utf8ToGenI(self.mons[i].base_data.ot_name) else @splat(80);
         }
         i = 0;
         while (i < 6): (i += 1) {
-            mon_names[i] = if (self.number_of_mon >= i + 1) encoding.utf8ToGenI(self.mons[i].base_data.name) else .{80} ** 11;
+            mon_names[i] = if (self.number_of_mon >= i + 1) encoding.utf8ToGenI(self.mons[i].base_data.name) else @splat(80);
         }
         i = 0;
         while (i < 6): (i += 1) {

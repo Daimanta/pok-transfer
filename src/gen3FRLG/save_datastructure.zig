@@ -170,7 +170,7 @@ pub const AttackBlock = packed struct {
     }
 
     pub fn toMoveIds(self: *const @This()) [4]?*const moves_ns.Move {
-        var result: [4]?*const moves_ns.Move =.{null} ** 4;
+        var result: [4]?*const moves_ns.Move = @splat(null);
         if (self.move1 != 0) result[0] = &moves_ns.moves[self.move1 - 1];
         if (self.move2 != 0) result[1] = &moves_ns.moves[self.move2 - 1];
         if (self.move3 != 0) result[2] = &moves_ns.moves[self.move3 - 1];
@@ -631,7 +631,7 @@ pub const FullPartyData = struct {
     }
 
     pub fn toBytes(self: *const @This()) [party_mon_details_size]u8 {
-        var result: [party_mon_details_size]u8 = .{0} ** party_mon_details_size;
+        var result: [party_mon_details_size]u8 = @splat(0);
         const number_of_mon_bytes: [4]u8 = @bitCast(self.number_of_mon);
         std.mem.copyForwards(u8, result[0..], &number_of_mon_bytes);
         var i: usize = 0;
@@ -771,7 +771,7 @@ pub const FullBoxData = struct {
     }
 
     pub fn toBytes(self: *const @This()) [box_size]u8 {
-        var result: [box_size]u8 = .{0} ** box_size;
+        var result: [box_size]u8 = @splat(0);
         var i: usize = 0;
         while (i < self.number_of_mons): (i += 1) {
             const start = i * stripped_mon_size;
