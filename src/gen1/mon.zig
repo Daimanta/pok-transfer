@@ -365,6 +365,71 @@ pub const Mon = struct {
             return "";
         }
     }
+
+    pub fn generate(dex_number: u8, ot_id: u16, attack_iv: u4, defense_iv: u4, speed_iv: u4, special_iv: u4) @This(){
+        const base_data = MonBaseData{
+            .dex_number = dex_number,
+            .ivs = .{
+                .attack = attack_iv,
+                .defense = defense_iv,
+                .speed = speed_iv,
+                .special = special_iv
+            },
+            .level = 7,
+            .current_hp = 20,
+            .evs = .{
+                .attack = 0,
+                .defense = 0,
+                .hp = 0,
+                .special = 0,
+                .speed = 0,
+            },
+            .experience_points = 0,
+            .held_item = 0,
+            .move_pps = [4]MonPP{
+                MonPP{
+                    .applied_pp_up = 0,
+                    .current_pp = 0,
+                },
+                MonPP{
+                    .applied_pp_up = 0,
+                    .current_pp = 0,
+                },
+                MonPP{
+                    .applied_pp_up = 0,
+                    .current_pp = 0,
+                },
+                MonPP{
+                    .applied_pp_up = 0,
+                    .current_pp = 0,
+                },
+                },
+            .ot_name = "foo",
+            .ot_number = ot_id,
+            .moves = .{
+                &moves_ns.moves[5],
+                null,
+                null,
+                null
+            },
+            .name = "circ",
+            .statuses = .{
+                .asleep = false,
+                .burned = false,
+                .frozen = false,
+                .paralyzed = false,
+                .poisoned = false
+            },
+            .type1 = 2,
+            .type2 = 0,
+        };
+        const stats = Stats.fromBaseData(base_data);
+
+        return Mon{
+            .base_data = base_data,
+            .stats = stats
+        };
+    }
 };
 
 pub const MonSpecies = extern struct {
@@ -671,6 +736,7 @@ pub const CaughtMon = struct {
             std.mem.copyForwards(u8, save_bytes[start..start + gen1data.box_size], @ptrCast(&fullBoxData));
         }
 
+        gen1data.processDexToSave(self, save_bytes);
         gen1data.set_correct_checksums(save_bytes);
     }
 };

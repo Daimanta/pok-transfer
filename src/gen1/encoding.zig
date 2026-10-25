@@ -37,10 +37,10 @@ pub fn utf8ToGenI(input: []const u8) [11]u8{
     var result_index: usize = 0;
     while (current < input.len) {
         if (input[current] >= 'A' and input[current] <= 'Z') {
-            result[result_index] = 0x80 + input[current] - 'A';
+            result[result_index] = 0x80 - 'A' + input[current] ;
             current += 1;
         } else if (input[current] >= 'a' and input[current] <= 'z') {
-            result[result_index] = 0xA0 + input[current] - 'a';
+            result[result_index] = 0xA0 - 'a' + input[current] ;
             current += 1;
         } else if (input[current] == '(') {
             result[result_index] = 0x9A;
@@ -49,7 +49,7 @@ pub fn utf8ToGenI(input: []const u8) [11]u8{
             result[result_index] = 0x9B;
             current += 1;
         } else if(input[current] >= '0' and input[current] <= '9') {
-            result[result_index] = 0xF6 + input[current] - '0';
+            result[result_index] = 0xF6 - '0' + input[current] ;
             current += 1;
         } else if (input[current] == '.') {
             result[result_index] = 0xF2;

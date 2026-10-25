@@ -1,6 +1,12 @@
 const std = @import("std");
 
+const gen1 = @import("mon.zig");
+
 pub const save_size = 1 << 15;
+
+pub const owned_start = 0x25A3;
+pub const seen_start = 0x25B6;
+pub const dex_size: usize = 0x13;
 
 pub const trainer_name = 0x2598;
 pub const trainer_name_size = 0xb;
@@ -548,6 +554,46 @@ pub fn bank3_checksum_is_valid(save: *const [save_size]u8) bool {
     }
 
     return true;
+}
+
+pub fn getOwned(bytes: []u8) *[dex_size]u8 {
+    return bytes[owned_start..owned_start + dex_size];
+}
+
+pub fn getSeen(bytes: []u8) *[dex_size]u8 {
+    return bytes[seen_start..seen_start + dex_size];
+}
+
+pub fn markMonAsSeenAndCaught(seen: *[dex_size]u8, owned: *[dex_size]u8, dex_number: u8) void {
+    const index_number = dex_number - 1;
+    const byte = index_number / 8;
+    const bit: u3 = @intCast(@mod(index_number, 8));
+    seen[byte] = seen[byte] | (@as(u8, 1) << bit);
+    owned[byte] = owned[byte] | (@as(u8, 1) << bit);
+}
+
+pub fn writeCaughtToDex(seen: *[dex_size]u8, owned: *[dex_size]u8, bytes: []u8) void {
+    std.mem.copyForwards(u8, bytes[owned_start..owned_start+dex_size], owned[0..]);
+    std.mem.copyForwards(u8, bytes[seen_start..seen_start+dex_size], seen[0..]);
+}
+
+pub fn processDexToSave(caught: *const gen1.CaughtMon, bytes: []u8) void {
+    const owned = getOwned(bytes);
+    const seen = getSeen(bytes);
+    var i: usize = 0;
+    while (i < caught.party.number_of_mon): (i += 1) {
+        markMonAsSeenAndCaught(seen, owned, caught.party.mons[i].base_data.dex_number);
+    }
+
+    var j: usize = 0;
+    while (j < caught.boxes.len): (j += 1) {
+        var k: usize = 0;
+        while (k < caught.boxes[j].number_of_mon): (k += 1) {
+            markMonAsSeenAndCaught(seen, owned, caught.boxes[j].mons[k].base_data.dex_number);
+        }
+    }
+
+    writeCaughtToDex(seen, owned, bytes);
 }
 
 pub fn set_correct_checksums(save: *[save_size]u8) void {
