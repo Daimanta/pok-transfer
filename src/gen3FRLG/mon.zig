@@ -94,7 +94,7 @@ pub const EV = struct {
         
     }
     
-    fn fromGen2(ev: @import("../gen2GS/mon.zig").EV) @This() {
+    fn fromGen2(ev: @import("../gen2/mon.zig").EV) @This() {
         var new_hp_ev = ev.hp / 256;
         var new_attack_ev = ev.attack / 256;
         var new_defense_ev = ev.defense / 256;
@@ -660,7 +660,8 @@ pub const CaughtMon = struct {
     boxes: [gen3_data.number_of_boxes]MonBox,
     move_mon: interface.MoveMon,
 
-    pub fn init(bytes: []const u8, allocator: std.mem.Allocator) @This() {
+    pub fn init(bytes: []const u8, allocator: std.mem.Allocator, version: versions.Version) @This() {
+        _ = version;
         const full_party_data = gen3_data.FullPartyData.init(bytes);
         const mon_party = MonParty.init(full_party_data, allocator);
 
@@ -1001,7 +1002,7 @@ pub const Mon = struct {
         };
     }
 
-    fn fromGen2(mon: @import("../gen2GS/mon.zig").Mon) @This() {
+    fn fromGen2(mon: @import("../gen2/mon.zig").Mon) @This() {
         const ot_id_bytes = std.mem.asBytes(&mon.base_data.ot_number);
         const ot_id = enrich_ot_id(mon.base_data.ot_number);
         const randomness = std.crypto.hash.Md5.hashResult(&[_]u8{mon.base_data.ivs.special, mon.base_data.ivs.attack, mon.base_data.ivs.defense, mon.base_data.ivs.speed, ot_id_bytes[0], ot_id_bytes[1]});

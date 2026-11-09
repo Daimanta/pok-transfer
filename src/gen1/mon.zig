@@ -6,7 +6,7 @@ const pok_transfer = @import("../root.zig");
 const StringBuilder = @import("../util/strings.zig").StringBuilder;
 const interface = @import("../general/interface.zig");
 const versions = @import("../general/versions.zig");
-const gen2 = @import("../gen2GS/mon.zig");
+const gen2 = @import("../gen2/mon.zig");
 const gen3 = @import("../gen3FRLG/mon.zig");
 
 pub const box_size = 20;
@@ -496,7 +496,8 @@ pub const CaughtMon = struct {
     boxes: [12]MonBox,
     move_mon: interface.MoveMon,
 
-    pub fn init(input: []const u8, allocator: std.mem.Allocator) @This() {
+    pub fn init(input: []const u8, allocator: std.mem.Allocator, version: versions.Version) @This() {
+        _ = version;
         const current_box: u16 = input[gen1data.current_box_start] + (@as(u16, input[gen1data.current_box_start + 1]) << 8);
         const has_changed = current_box > 127;
         const current_box_number: u8 = @intCast(current_box & 127);

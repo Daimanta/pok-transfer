@@ -1,6 +1,6 @@
 const std = @import("std");
 const gen1 = @import("../gen1/mon.zig");
-const gen2 = @import("../gen2GS/mon.zig");
+const gen2 = @import("../gen2/mon.zig");
 const gen3 = @import("../gen3FRLG/mon.zig");
 
 const versions = @import("versions.zig");
@@ -14,15 +14,15 @@ pub const CaughtMonInterface = union(enum) {
       pub fn init(version: versions.Version, bytes: []const u8, allocator: std.mem.Allocator) CaughtMonInterface {
           if (version == .GEN1) {
               return .{
-                  .gen1 = gen1.CaughtMon.init(bytes, allocator)
+                  .gen1 = gen1.CaughtMon.init(bytes, allocator, version)
               };
-          } else if (version == .GEN2GS) {
+          } else if (version == .GEN2GS or version == .GEN2C) {
               return .{
-                  .gen2gs = gen2.CaughtMon.init(bytes, allocator)
+                  .gen2gs = gen2.CaughtMon.init(bytes, allocator, version)
               };
           } else if (version == .GEN3FRLG){
               return .{
-                    .gen3frlg = gen3.CaughtMon.init(bytes, allocator)
+                    .gen3frlg = gen3.CaughtMon.init(bytes, allocator, version)
               };
           } else {
             unreachable;

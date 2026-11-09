@@ -110,7 +110,7 @@ pub fn main(init: std.process.Init) !void {
         exit(1);
     };
 
-    if (source_version != .GEN1 and source_version != .GEN2GS and source_version != .GEN3FRLG) {
+    if (source_version != .GEN1 and source_version != .GEN2GS and source_version != .GEN2C and source_version != .GEN3FRLG) {
         pok_transfer.bufferedPrint("Only Gen 1,2,3 is supported at this moment. Exiting.\n", .{});
         exit(0);
     }
@@ -119,7 +119,6 @@ pub fn main(init: std.process.Init) !void {
         pok_transfer.bufferedPrint("Only Gen 1 supports transfer at the moment. Exiting.\n", .{});
         exit(0);
     }
-
 
     var destination_version: ?versions.Version = null;
     if (destination_bytes_opt != null) {
@@ -132,7 +131,6 @@ pub fn main(init: std.process.Init) !void {
     var caught_source = interface.CaughtMonInterface.init(source_version, source_bytes, allocator);
     var caught_destination: ?interface.CaughtMonInterface = if (destination_bytes_opt != null) interface.CaughtMonInterface.init(destination_version.?, destination_bytes_opt.?, allocator) else null;
     tui.startTui(&caught_source, init.io) catch {};
-
 
 
     if (mode == .TRANSFER) {

@@ -530,7 +530,7 @@ pub const MonBox = struct {
         var mons: [20]Mon = std.mem.zeroes([20]Mon);
         var i: usize = 0;
         var number_of_mon = fullBoxData.number_of_mon;
-        if (number_of_mon == 255) {
+        if (number_of_mon > mons.len) {
             number_of_mon = 0;
         }
 
@@ -719,11 +719,15 @@ pub const CaughtMon = struct {
     party: MonParty,
     boxes: [number_of_boxes]MonBox,
     move_mon: interface.MoveMon,
+    version: versions.Version,
 
-    pub fn init(input: []const u8, allocator: std.mem.Allocator) @This() {
-        const current_box: u8 = input[gen2data.current_box_number];
-        const temp_box_data = gen2data.FullBoxData.init(input[gen2data.current_box_start..gen2data.current_box_start + gen2data.box_size]);
-        const party_data: gen2data.FullPartyData = @bitCast(input[gen2data.party_start .. gen2data.party_start + gen2data.party_size][0..gen2data.party_size].*);
+    pub fn init(input: []const u8, allocator: std.mem.Allocator, version: versions.Version) @This() {
+        const gold_silver = version == .GEN2GS;
+        const current_box: u8 = if (gold_silver) input[gen2data.current_box_number_gs] else input[gen2data.current_box_number_c];
+        const current_box_start: usize = if (gold_silver) gen2data.current_box_start_gs else gen2data.current_box_start_c;
+        const temp_box_data = gen2data.FullBoxData.init(input[current_box_start..current_box_start + gen2data.box_size][0..gen2data.box_size]);
+        const current_party_start: usize = if (gold_silver) gen2data.party_start_gs else gen2data.party_start_c;
+        const party_data: gen2data.FullPartyData = @bitCast(input[current_party_start .. current_party_start + gen2data.party_size][0..gen2data.party_size].*);
         const party = MonParty.init(party_data, allocator);
 
         var boxes: [14]MonBox = undefined;
@@ -734,7 +738,6 @@ pub const CaughtMon = struct {
                  const box_start: usize = gen2data.boxes_start + (gen2data.box_size*j);
                  const box_end: usize = box_start + gen2data.box_size;
                  const full_box_data: gen2data.FullBoxData = gen2data.FullBoxData.init(input[box_start..box_end][0..gen2data.box_size]);
-
                  boxes[j] = MonBox.init(full_box_data, @intCast(j + 1), allocator);
              }
         }
@@ -743,7 +746,8 @@ pub const CaughtMon = struct {
             .current_box = current_box,
             .party = party,
             .boxes = boxes,
-            .move_mon = interface.MoveMon.init(party_size, box_size, number_of_boxes, allocator)
+            .move_mon = interface.MoveMon.init(party_size, box_size, number_of_boxes, allocator),
+            .version = version
         };
     }
 
@@ -771,13 +775,17 @@ pub const CaughtMon = struct {
     }
 
     pub fn toSave(self: *const @This(), save_bytes: *[gen2data.save_size]u8 ) void {
+        const gold_silver = self.version == .GEN2GS;
+
         const full_party_data = self.party.toFullPartyData();
         const full_party_bytes: [gen2data.party_size]u8 = @bitCast(full_party_data);
-        std.mem.copyForwards(u8, save_bytes[gen2data.party_start .. gen2data.party_start + gen2data.party_size], full_party_bytes[0..]);
+        const party_start: usize = if (gold_silver) gen2data.party_start_gs else gen2data.party_start_c;
+        std.mem.copyForwards(u8, save_bytes[party_start .. party_start + gen2data.party_size], full_party_bytes[0..]);
 
         const current_box = self.boxes[self.current_box];
         const current_box_data = current_box.toFullBoxData().toFullBoxDataByteArray();
-        std.mem.copyForwards(u8, save_bytes[gen2data.current_box_start..gen2data.current_box_start + gen2data.box_size], current_box_data[0..]);
+        const current_box_start: usize = if (gold_silver) gen2data.current_box_start_gs else gen2data.current_box_start_c;
+        std.mem.copyForwards(u8, save_bytes[current_box_start..current_box_start + gen2data.box_size], current_box_data[0..]);
 
         var i: usize = 0;
         while (i < number_of_boxes): ( i += 1) {
@@ -787,7 +795,7 @@ pub const CaughtMon = struct {
             std.mem.copyForwards(u8, save_bytes[box_start .. box_end], box_data[0..]);
         }
 
-        gen2data.set_checksum(save_bytes);
+        gen2data.set_checksum(save_bytes, self.version == .GEN2GS);
     }
 
     pub fn insertMon(self: *@This(), mon: interface.MonInterface) !void{
