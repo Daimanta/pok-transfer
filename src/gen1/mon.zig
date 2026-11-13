@@ -7,7 +7,7 @@ const StringBuilder = @import("../util/strings.zig").StringBuilder;
 const interface = @import("../general/interface.zig");
 const versions = @import("../general/versions.zig");
 const gen2 = @import("../gen2/mon.zig");
-const gen3 = @import("../gen3FRLG/mon.zig");
+const gen3 = @import("../gen3/mon.zig");
 
 pub const box_size = 20;
 pub const number_of_boxes = 12;

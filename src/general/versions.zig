@@ -1,7 +1,7 @@
 const std = @import("std");
 const gen1 = @import("../gen1/save_datastructure.zig");
 const gen2 = @import("../gen2/save_datastructure.zig");
-const gen3 = @import("../gen3FRLG/save_datastructure.zig");
+const gen3 = @import("../gen3/save_datastructure.zig");
 
 pub const UnknownVersionError = error{UnknownVersion};
 

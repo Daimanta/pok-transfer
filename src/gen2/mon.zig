@@ -6,7 +6,7 @@ const gen2data = @import("./save_datastructure.zig");
 const interface = @import("../general/interface.zig");
 const versions = @import("../general/versions.zig");
 const gen1 = @import("../gen1/mon.zig");
-const gen3 = @import("../gen3FRLG/mon.zig");
+const gen3 = @import("../gen3/mon.zig");
 
 const pok_transfer = @import("../root.zig");
 

@@ -1,7 +1,7 @@
 const std = @import("std");
 const gen1 = @import("../gen1/mon.zig");
 const gen2 = @import("../gen2/mon.zig");
-const gen3 = @import("../gen3FRLG/mon.zig");
+const gen3 = @import("../gen3/mon.zig");
 
 const versions = @import("versions.zig");
 const root = @import("../root.zig");
