@@ -659,10 +659,10 @@ pub const CaughtMon = struct {
     party: MonParty,
     boxes: [gen3_data.number_of_boxes]MonBox,
     move_mon: interface.MoveMon,
+    version: versions.Version,
 
     pub fn init(bytes: []const u8, allocator: std.mem.Allocator, version: versions.Version) @This() {
-        _ = version;
-        const full_party_data = gen3_data.FullPartyData.init(bytes);
+        const full_party_data = gen3_data.FullPartyData.init(bytes, version);
         const mon_party = MonParty.init(full_party_data, allocator);
 
         const box_bytes = gen3_data.getBoxBytes(bytes);
@@ -681,7 +681,8 @@ pub const CaughtMon = struct {
             .current_box = @bitCast(box_bytes[0..4].*),
             .party = mon_party,
             .boxes = boxes,
-            .move_mon = interface.MoveMon.init(6, 30, 14, allocator)
+            .move_mon = interface.MoveMon.init(6, 30, 14, allocator),
+            .version = version
         };
     }
 
@@ -705,8 +706,8 @@ pub const CaughtMon = struct {
 
     pub fn toSave(self: *const@This(), bytes: []u8) void {
         const full_party_bytes = self.party.toFullPartyData().toBytes();
-        const party_section_start = gen3_data.getSectionStart(bytes, gen3_data.party_section_id);
-        std.mem.copyForwards(u8, bytes[party_section_start + gen3_data.party_offset..], &full_party_bytes);
+        const party_start = if (self.version == .GEN3FRLG) gen3_data.getOffsetForDataLocation(bytes, gen3_data.party_location_frlg) else gen3_data.getOffsetForDataLocation(bytes, gen3_data.party_location_rs_e);
+        std.mem.copyForwards(u8, bytes[party_start..], &full_party_bytes);
 
         var full_box_datas: [number_of_boxes]gen3_data.FullBoxData = undefined;
         var i: usize = 0;

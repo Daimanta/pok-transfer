@@ -110,11 +110,6 @@ pub fn main(init: std.process.Init) !void {
         exit(1);
     };
 
-    if (source_version != .GEN1 and source_version != .GEN2GS and source_version != .GEN2C and source_version != .GEN3FRLG) {
-        pok_transfer.bufferedPrint("Only Gen 1,2,3 is supported at this moment. Exiting.\n", .{});
-        exit(0);
-    }
-
     if (mode == .TRANSFER and source_version != .GEN1) {
         pok_transfer.bufferedPrint("Only Gen 1 supports transfer at the moment. Exiting.\n", .{});
         exit(0);

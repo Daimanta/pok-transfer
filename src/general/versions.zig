@@ -9,7 +9,9 @@ pub const Version = enum {
     GEN1,
     GEN2GS,
     GEN2C,
-    GEN3FRLG
+    GEN3FRLG,
+    GEN3RS,
+    GEN3E
 };
 
 pub fn determineVersion(bytes: []const u8) UnknownVersionError!Version {
@@ -27,10 +29,10 @@ pub fn determineVersion(bytes: []const u8) UnknownVersionError!Version {
         }
         return UnknownVersionError.UnknownVersion;
     } else if (length == 1 << 17){
-        if (gen3.data_is_gen3_save(bytes)) {
-            return .GEN3FRLG;
+        if (!gen3.data_is_gen3_save(bytes)) {
+            return UnknownVersionError.UnknownVersion;
         }
-        return UnknownVersionError.UnknownVersion;
+        return gen3.getGen3Version(bytes);
     } else {
         return UnknownVersionError.UnknownVersion;
     }

@@ -8,8 +8,8 @@ const root = @import("../root.zig");
 
 pub const CaughtMonInterface = union(enum) {
       gen1: gen1.CaughtMon,
-      gen2gs: gen2.CaughtMon,
-      gen3frlg: gen3.CaughtMon,
+      gen2: gen2.CaughtMon,
+      gen3: gen3.CaughtMon,
 
       pub fn init(version: versions.Version, bytes: []const u8, allocator: std.mem.Allocator) CaughtMonInterface {
           if (version == .GEN1) {
@@ -18,11 +18,11 @@ pub const CaughtMonInterface = union(enum) {
               };
           } else if (version == .GEN2GS or version == .GEN2C) {
               return .{
-                  .gen2gs = gen2.CaughtMon.init(bytes, allocator, version)
+                  .gen2 = gen2.CaughtMon.init(bytes, allocator, version)
               };
-          } else if (version == .GEN3FRLG){
+          } else if (version == .GEN3FRLG or version == .GEN3E or version == .GEN3RS){
               return .{
-                    .gen3frlg = gen3.CaughtMon.init(bytes, allocator, version)
+                    .gen3 = gen3.CaughtMon.init(bytes, allocator, version)
               };
           } else {
             unreachable;
@@ -32,24 +32,24 @@ pub const CaughtMonInterface = union(enum) {
       pub fn printSummary(self: *const CaughtMonInterface) void {
           switch (self.*) {
               .gen1 => |x| gen1.CaughtMon.printSummary(&x),
-              .gen2gs => |x| gen2.CaughtMon.printSummary(&x),
-              .gen3frlg => |x| gen3.CaughtMon.printSummary(&x)
+              .gen2 => |x| gen2.CaughtMon.printSummary(&x),
+              .gen3 => |x| gen3.CaughtMon.printSummary(&x)
           }
       }
 
       pub fn printBoxSummary(self: *const CaughtMonInterface, box_index: u8) void {
           switch (self.*) {
               .gen1 => |x| x.boxes[box_index].printSummary(),
-              .gen2gs => |x| x.boxes[box_index].printSummary(),
-              .gen3frlg => |x| x.boxes[box_index].printSummary()
+              .gen2 => |x| x.boxes[box_index].printSummary(),
+              .gen3 => |x| x.boxes[box_index].printSummary()
           }
       }
 
       pub fn printPartySummary(self: *const CaughtMonInterface) void {
           switch (self.*) {
               .gen1 => |x| x.party.printSummary(),
-              .gen2gs => |x| x.party.printSummary(),
-              .gen3frlg => |x| x.party.printSummary()
+              .gen2 => |x| x.party.printSummary(),
+              .gen3 => |x| x.party.printSummary()
           }
       }
 
@@ -62,14 +62,14 @@ pub const CaughtMonInterface = union(enum) {
                       x.boxes[box.?].mons[mon].printFullSummary();
                   }
               },
-              .gen2gs => |x| {
+              .gen2 => |x| {
                   if (box == null) {
                       x.party.mons[mon].printFullSummary();
                   } else {
                       x.boxes[box.?].mons[mon].printFullSummary();
                   }
               },
-              .gen3frlg => |x| {
+              .gen3 => |x| {
                   x.printMonDetails(box, mon);
               }
           }
@@ -78,16 +78,16 @@ pub const CaughtMonInterface = union(enum) {
     pub fn getCurrentBoxSize(self: *const CaughtMonInterface, box_index: u8) u8 {
         return switch (self.*) {
             .gen1 => |x| x.boxes[box_index].number_of_mon,
-            .gen2gs => |x| x.boxes[box_index].number_of_mon,
-            .gen3frlg => |x| x.boxes[box_index].number_of_mon
+            .gen2 => |x| x.boxes[box_index].number_of_mon,
+            .gen3 => |x| x.boxes[box_index].number_of_mon
         };
     }
 
     pub fn getCurrentPartySize(self: *const CaughtMonInterface) u8 {
         return switch (self.*) {
             .gen1 => |x| x.party.number_of_mon,
-            .gen2gs => |x| x.party.number_of_mon,
-            .gen3frlg => |x| @intCast(x.party.number_of_mon)
+            .gen2 => |x| x.party.number_of_mon,
+            .gen3 => |x| @intCast(x.party.number_of_mon)
         };
     }
 
@@ -112,56 +112,56 @@ pub const CaughtMonInterface = union(enum) {
       pub fn getMoveMon(self: *CaughtMonInterface) *MoveMon {
           return switch (self.*) {
               .gen1 => &self.gen1.move_mon,
-              .gen2gs => &self.gen2gs.move_mon,
-              .gen3frlg => &self.gen3frlg.move_mon
+              .gen2 => &self.gen2.move_mon,
+              .gen3 => &self.gen3.move_mon
           };
       }
 
     pub fn removeMon(self: *CaughtMonInterface, box: ?u8, mon: u8) void {
         switch (self.*) {
             .gen1 => self.gen1.removeMon(box, mon),
-            .gen2gs => self.gen2gs.removeMon(box, mon),
-            .gen3frlg => self.gen3frlg.removeMon(box, mon),
+            .gen2 => self.gen2.removeMon(box, mon),
+            .gen3 => self.gen3.removeMon(box, mon),
         }
     }
 
     pub fn getMon(self: *CaughtMonInterface, box: ?u8, mon: u8) MonInterface {
         return switch (self.*) {
             .gen1 => .{.gen1 = self.gen1.getMon(box, mon)},
-            .gen2gs => .{.gen2gs = self.gen2gs.getMon(box, mon)},
-            .gen3frlg => .{.gen3frlg = self.gen3frlg.getMon(box, mon)}
+            .gen2 => .{.gen2gs = self.gen2.getMon(box, mon)},
+            .gen3 => .{.gen3frlg = self.gen3.getMon(box, mon)}
         };
     }
 
     pub fn toSave(self: *CaughtMonInterface, save_bytes: []u8) void {
         switch (self.*) {
             .gen1 => self.gen1.toSave(save_bytes[0..gen1.save_size]),
-            .gen2gs => self.gen2gs.toSave(save_bytes[0..gen2.save_size]),
-            .gen3frlg => self.gen3frlg.toSave(save_bytes[0..gen3.save_size])
+            .gen2 => self.gen2.toSave(save_bytes[0..gen2.save_size]),
+            .gen3 => self.gen3.toSave(save_bytes[0..gen3.save_size])
         }
     }
 
     pub fn getSaveSize(self: *CaughtMonInterface) usize  {
         return switch (self.*) {
             .gen1 => gen1.save_size,
-            .gen2gs => gen2.save_size,
-            .gen3frlg => gen3.save_size
+            .gen2 => gen2.save_size,
+            .gen3 => gen3.save_size
         };
     }
 
     pub fn getVersion(self: *CaughtMonInterface) versions.Version {
         return switch (self.*) {
             .gen1 => self.gen1.getVersion(),
-            .gen2gs => self.gen2gs.getVersion(),
-            .gen3frlg => self.gen3frlg.getVersion()
+            .gen2 => self.gen2.getVersion(),
+            .gen3 => self.gen3.getVersion()
         };
     }
 
     pub fn insertMon(self: *CaughtMonInterface, mon: MonInterface) !void {
         switch (self.*) {
             .gen1 => try self.gen1.insertMon(mon),
-            .gen2gs => try self.gen2gs.insertMon(mon),
-            .gen3frlg => try self.gen3frlg.insertMon(mon)
+            .gen2 => try self.gen2.insertMon(mon),
+            .gen3 => try self.gen3.insertMon(mon)
         }
     }
 
@@ -169,8 +169,8 @@ pub const CaughtMonInterface = union(enum) {
     pub fn getFreeSpace(self: *CaughtMonInterface) u16 {
         return switch (self.*) {
             .gen1 => self.gen1.getFreeSpace(),
-            .gen2gs => self.gen2gs.getFreeSpace(),
-            .gen3frlg => self.gen3frlg.getFreeSpace()
+            .gen2 => self.gen2.getFreeSpace(),
+            .gen3 => self.gen3.getFreeSpace()
         };
     }
 

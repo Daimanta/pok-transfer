@@ -2,12 +2,19 @@ const std = @import("std");
 const moves_ns = @import("../general/moves.zig");
 const gen3 = @import("mon.zig");
 const encoding = @import("encoding.zig");
+const versions = @import("../general/versions.zig");
 
 const copyForwards = std.mem.copyForwards;
 const asBytes = std.mem.asBytes;
 const writeInt = std.mem.writeInt;
 
 pub const save_size = 1 << 17;
+
+pub const DataLocation = struct {
+    section_id: usize,
+    offset: usize,
+    size: usize
+};
 
 pub const save_copy_size = 57344;
 pub const section_size = 4096;
@@ -27,11 +34,25 @@ pub const box_section_size = 3968;
 pub const last_box_section_size = 2000;
 pub const boxes_total_size = 33744;
 
-pub const party_offset = 0x0034;
-pub const party_mons_offset = 0x0038;
+pub const game_code_location: DataLocation = .{.section_id = 0, .offset = 0x00AC, .size = 4};
+pub const money_location: DataLocation = .{.section_id = 1, .offset = 0x0490, .size = 4};
+pub const coins_location: DataLocation = .{.section_id = 1, .offset = 0x0494, .size = 2};
+pub const party_size_location_frlg: DataLocation = .{.section_id = 1, .offset = 0x0034, .size = 1};
+pub const party_size_location_rs_e: DataLocation = .{.section_id = 1, .offset = 0x0234, .size = 4};
+pub const party_location_frlg: DataLocation = .{.section_id = 1, .offset = 0x0038, .size = 600};
+pub const party_location_rs_e: DataLocation = .{.section_id = 1, .offset = 0x0238, .size = 600};
+
+pub const owned_location: DataLocation = .{.section_id = 0, .offset = 0x0028, .size = dex_byte_size};
+pub const seen_a_location: DataLocation = .{.section_id = 0, .offset = 0x005C, .size = dex_byte_size};
+pub const seen_b_location_frlg: DataLocation = .{.section_id = 1, .offset = 0x05F8, .size = dex_byte_size};
+pub const seen_b_location_rs: DataLocation = .{.section_id = 1, .offset = 0x0938, .size = dex_byte_size};
+pub const seen_b_location_e: DataLocation = .{.section_id = 1, .offset = 0x0988, .size = dex_byte_size};
+pub const seen_c_location_frlg: DataLocation = .{.section_id = 4, .offset = 0x0B98, .size = dex_byte_size};
+pub const seen_c_location_rs: DataLocation = .{.section_id = 4, .offset = 0x0C0C, .size = dex_byte_size};
+pub const seen_c_location_e: DataLocation = .{.section_id = 4, .offset = 0x0CA4, .size = dex_byte_size};
+
 pub const party_mon_details_size = 604;
 pub const party_size = 1528;
-
 pub const stripped_mon_size = 80;
 pub const full_mon_size = 100;
 pub const mon_subsection_size = 12;
@@ -44,15 +65,7 @@ pub const box_size = stripped_mon_size * mon_per_box;
 
 pub const dex_byte_size = 49;
 pub const owned_section_id = 0;
-pub const owned_offset = 0x0028;
 
-pub const seen_a_section_id = 0;
-pub const seen_b_section_id = 1;
-pub const seen_c_section_id = 4;
-
-pub const seen_a_offset = 0x005C;
-pub const seen_b_offset = 0x05F8;
-pub const seen_c_offset = 0x0B98;
 
 pub const orderings: [24][]const u8 = .{
     "GAEM",
@@ -617,12 +630,22 @@ pub const FullPartyData = struct {
     number_of_mon: u32,
     mons: [6]MonData,
 
-    pub fn init(bytes: []const u8) @This() {
-        const party_section_start = getSectionStart(bytes, party_section_id);
-        const mon_start = party_section_start + party_mons_offset;
-        const mon_bytes = bytes[mon_start..mon_start + 600];
+    pub fn init(bytes: []const u8, version: versions.Version) @This() {
+        var mon_bytes: [600]u8 = undefined;
+        var number_of_mon: u32 = 0;
+        if (version == .GEN3FRLG) {
+            const byte_value: u8 = @bitCast(getBytesForDataLocation(bytes, party_size_location_frlg));
+            std.debug.print("Found {d} mon in party\n", .{byte_value});
+            number_of_mon = byte_value;
+            mon_bytes = getBytesForDataLocation(bytes, party_location_frlg);
+        } else {
+            std.debug.print("Not frlg\n", .{});
+            number_of_mon = @bitCast(getBytesForDataLocation(bytes, party_size_location_rs_e));
+            mon_bytes = getBytesForDataLocation(bytes, party_location_rs_e);
+        }
+
         return .{
-            .number_of_mon = bytes[party_section_start + party_offset],
+            .number_of_mon = number_of_mon,
             .mons =
             .{MonData.fromBytes(mon_bytes[0..100].*), MonData.fromBytes(mon_bytes[100..200].*),
                 MonData.fromBytes(mon_bytes[200..300].*), MonData.fromBytes(mon_bytes[300..400].*),
@@ -677,9 +700,33 @@ pub fn getSectionStart(bytes: []const u8, section_number: u8) usize {
 
 pub fn data_is_gen3_save(bytes: []const u8) bool {
     if (bytes.len != 1 << 17) return false;
-    const magic_bytes = bytes[signature_offset..signature_offset + 4];
+    const section0_start = getSectionStart(bytes, 0);
+    const magic_bytes = bytes[section0_start + signature_offset..section0_start + signature_offset + 4];
     return std.mem.eql(u8, &[4]u8{0x25, 0x20, 0x01, 0x08}, magic_bytes);
 }
+
+pub fn getGen3Version(bytes: []const u8) versions.Version {
+    const game_code: u32 = @bitCast(getBytesForDataLocation(bytes, game_code_location));
+    if (game_code == 1) return .GEN3FRLG;
+    const money: u32 = @bitCast(getBytesForDataLocation(bytes, money_location));
+    const coins: u16 = @bitCast(getBytesForDataLocation(bytes, coins_location));
+    if (money > 10_000_000 or coins > 9999) {
+        return .GEN3E;
+    } else {
+        return .GEN3RS;
+    }
+}
+
+pub fn getBytesForDataLocation(bytes: []const u8, comptime data_location: DataLocation) [data_location.size]u8{
+    const section_start = getSectionStart(bytes, data_location.section_id);
+    return bytes[section_start + data_location.offset .. section_start + data_location.offset + data_location.size][0..data_location.size].*;
+}
+
+pub fn getOffsetForDataLocation(bytes: []const u8, comptime data_location: DataLocation) usize {
+    const section_start = getSectionStart(bytes, data_location.section_id);
+    return section_start + data_location.offset;
+}
+
 
 pub fn getBoxBytes(bytes: []const u8) [boxes_total_size]u8 {
     var result: [boxes_total_size]u8 = undefined;
@@ -784,40 +831,49 @@ pub const FullBoxData = struct {
 };
 
 pub fn getOwned(bytes: []const u8) [dex_byte_size]u8 {
-    const section_start = getSectionStart(bytes, owned_section_id);
-    return bytes[section_start + owned_offset..section_start + owned_offset + dex_byte_size][0..dex_byte_size].*;
+    return getBytesForDataLocation(bytes, owned_location);
 }
 
 pub fn getSeen(bytes: []const u8) [dex_byte_size]u8{
-    const section_start = getSectionStart(bytes, seen_a_section_id);
-    return bytes[section_start + seen_a_offset..section_start + seen_a_offset + dex_byte_size][0..dex_byte_size].*;
+    return getBytesForDataLocation(bytes, seen_a_location);
 }
 
-pub fn writeCaughtToDex(seen: *[dex_byte_size]u8, owned: *[dex_byte_size]u8, bytes: []u8) void {
+pub fn writeCaughtToDex(seen: *[dex_byte_size]u8, owned: *[dex_byte_size]u8, bytes: []u8, version: versions.Version) void {
     writeOwned(owned, bytes);
     writeSeenA(seen, bytes);
-    writeSeenB(seen, bytes);
-    writeSeenC(seen, bytes);
+    writeSeenB(seen, bytes, version);
+    writeSeenC(seen, bytes, version);
 }
 
 fn writeOwned(owned: *const [dex_byte_size]u8, bytes: []u8) void {
-    const section_start = getSectionStart(bytes, owned_section_id);
-    copyForwards(u8, bytes[section_start + owned_offset..section_start + owned_offset + dex_byte_size], owned);
+    const start = getOffsetForDataLocation(bytes, owned_location);
+    copyForwards(u8, bytes[start..start + owned_location.size], owned);
 }
 
 fn writeSeenA(seen: *const [dex_byte_size]u8, bytes: []u8) void {
-    const section_start = getSectionStart(bytes, seen_a_section_id);
-    copyForwards(u8, bytes[section_start + seen_a_offset..section_start + seen_a_offset + dex_byte_size], seen);
+    const start = getOffsetForDataLocation(bytes, seen_a_location);
+    copyForwards(u8, bytes[start..start + seen_a_location.size], seen);
 }
 
-fn writeSeenB(seen: *const [dex_byte_size]u8, bytes: []u8) void {
-    const section_start = getSectionStart(bytes, seen_b_section_id);
-    copyForwards(u8, bytes[section_start + seen_b_offset..section_start + seen_b_offset + dex_byte_size], seen);
+fn writeSeenB(seen: *const [dex_byte_size]u8, bytes: []u8, version: versions.Version) void {
+    const start = switch (version) {
+        .GEN3FRLG =>   getOffsetForDataLocation(bytes, seen_b_location_frlg),
+        .GEN3RS => getOffsetForDataLocation(bytes, seen_b_location_rs),
+        .GEN3E => getOffsetForDataLocation(bytes, seen_b_location_e),
+        else => unreachable
+    };
+
+    copyForwards(u8, bytes[start..start + dex_byte_size], seen);
 }
 
-fn writeSeenC(seen: *const [dex_byte_size]u8, bytes: []u8) void {
-    const section_start = getSectionStart(bytes, seen_c_section_id);
-    copyForwards(u8, bytes[section_start + seen_c_offset..section_start + seen_c_offset + dex_byte_size], seen);
+fn writeSeenC(seen: *const [dex_byte_size]u8, bytes: []u8, version: versions.Version) void {
+    const start = switch (version) {
+        .GEN3FRLG =>   getOffsetForDataLocation(bytes, seen_c_location_frlg),
+        .GEN3RS => getOffsetForDataLocation(bytes, seen_c_location_rs),
+        .GEN3E => getOffsetForDataLocation(bytes, seen_c_location_e),
+        else => unreachable
+    };
+    copyForwards(u8, bytes[start..start + dex_byte_size], seen);
 }
 
 fn markMonAsSeenAndCaught(seen: *[dex_byte_size]u8, owned: *[dex_byte_size]u8, dex_number: u16) void {
@@ -845,5 +901,5 @@ pub fn processDexToSave(caught: *const gen3.CaughtMon, bytes: []u8) void {
         }
     }
 
-    writeCaughtToDex(&seen, &owned, bytes);
+    writeCaughtToDex(&seen, &owned, bytes, caught.version);
 }
